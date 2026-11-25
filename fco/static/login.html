@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FC 매물 분석 로그인</title>
+<style>
+:root { --bg: #f4f3f0; --surface: #fcfcfb; --line: #e3e2dd; --text: #1d1d1b; --text-2: #5f5e5a; --accent: #2a6fdb; --neg: #c2410c; }
+@media (prefers-color-scheme: dark) { :root { --bg: #121211; --surface: #1a1a19; --line: #2f2f2c; --text: #ecebe7; --text-2: #a5a49e; --accent: #5b9bff; --neg: #fb923c; } }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--text);
+  font-family: "Pretendard", system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; padding: 16px; }
+form { width: min(340px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 24px; display: grid; gap: 12px; }
+h1 { font-size: 18px; margin: 0; }
+p { margin: 0; color: var(--text-2); font-size: 13px; }
+input { font: inherit; font-size: 18px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); letter-spacing: 4px; }
+button { font: inherit; font-weight: 600; padding: 10px; border: 0; border-radius: 10px; background: var(--accent); color: #fff; cursor: pointer; }
+button:disabled { opacity: .6; }
+#msg { color: var(--neg); font-size: 13px; min-height: 1em; }
+</style>
+</head>
+<body>
+<form id="f">
+  <h1>FC 매물 분석</h1>
+  <p>비밀번호를 입력하세요. 한 번 들어오면 이 기기에서 30일 동안 유지됩니다.</p>
+  <input id="pw" type="password" inputmode="numeric" autocomplete="current-password" autofocus required aria-label="비밀번호">
+  <button id="b">들어가기</button>
+  <div id="msg" role="alert"></div>
+</form>
+<script>
+document.getElementById("f").onsubmit = async (e) => {
+  e.preventDefault();
+  const b = document.getElementById("b"), msg = document.getElementById("msg");
+  b.disabled = true; msg.textContent = "";
+  try {
+    const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json", "X-FCO-Request": "1" },
+      body: JSON.stringify({ password: document.getElementById("pw").value }) });
+    if (r.ok) { location.replace("/"); return; }
+    msg.textContent = (await r.json()).error || "로그인 실패";
+  } catch (err) { msg.textContent = "서버에 연결할 수 없습니다"; }
+  b.disabled = false; document.getElementById("pw").select();
+};
+</script>
+</body>
+</html>

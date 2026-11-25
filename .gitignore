@@ -1,0 +1,17 @@
+# 비밀 정보 (API 키, 비밀번호 해시, 카카오 토큰)
+config/secrets.local.json
+config/*.local.json
+
+# 실행 데이터: DB, 백업, 로그, 터널 주소, 절전 설정 백업
+data/
+*.sqlite3
+*.sqlite3-*
+*.log
+
+# 외부 실행 파일 (cloudflared는 공식 배포본을 따로 받음)
+tools/*.exe
+
+# Python
+__pycache__/
+*.pyc
+.venv/

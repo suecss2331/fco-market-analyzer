@@ -1,0 +1,148 @@
+{
+  "_comment": "모든 계산 기준값. 코드에 고정하지 않고 이 파일(추후 설정 화면)에서 변경한다.",
+  "_cashBp": "현재 보유한 순 BP (매물 제외). 총 운용 BP = 순 BP + 보유 매물 현재 평가액. 초기값 8.839억(2026-11-24 수정: 이전 883.9억 입력은 오류)",
+  "cashBp": 41000000,
+  "fee": {
+    "_comment": "판매 수수료 = 기본 × (1 − 상시 할인 합). 할인은 곱하지 않고 더한다 (FC STATS 수수료 계산기 안내, 이벤트로 바뀔 수 있음). sellFeeRate 는 이 값들로 자동 계산되며 쿠폰은 포함하지 않는다",
+    "baseRate": 0.4,
+    "premiumPcBang": true,
+    "pcBangDiscount": 0.3,
+    "topClass": true,
+    "topClassDiscount": 0.2,
+    "sellFeeRate": 0.2
+  },
+  "priceRange": {
+    "_comment": "activePreset 값만 바꾸면 분석 대상 가격대가 바뀐다. 단위: BP",
+    "activePreset": "1억-10억",
+    "presets": {
+      "1억-10억": {
+        "minBp": 100000000,
+        "maxBp": 1000000000
+      },
+      "10억-100억": {
+        "minBp": 1000000000,
+        "maxBp": 10000000000
+      }
+    }
+  },
+  "allocation": {
+    "_comment": "9단계 자금 배분. 카드당 한도 = 총 운용 BP × maxPerCardRatio − 그 카드 보유 평가액. 매수 비용은 순 BP 에서만 차감",
+    "maxPerCardRatio": 0.2,
+    "maxTargetOrders": 8,
+    "targetOrderRequireReach": true,
+    "maxQtyPerCard": 5,
+    "_maxQtyPerCard": "카드당 최대 수량 (기획서에 없는 추가 제한, 2026-11-24). 거래량 데이터가 없어 한 카드를 많이 사고팔 수 있는지 확인 불가. null 이면 제한 없음"
+  },
+  "buyPrice": {
+    "_comment": "매수 적정가 = 평일 기준가 × 할인 계수. 계수는 30일 CV 에 따라 선형: CV ≤ cvForMaxFactor → 0.98, CV ≥ cvForMinFactor → 0.90",
+    "basis": "mean",
+    "discountFactorMin": 0.9,
+    "discountFactorMax": 0.98,
+    "cvForMaxFactor": 0.05,
+    "cvForMinFactor": 0.3,
+    "minTargetRoi": 0.05,
+    "reachLookbackDays": 30
+  },
+  "popularSquad": {
+    "_comment": "순위 가중치 = topN + 1 - 순위 (1위 20점 ... 20위 1점). 카드 점수 = 그 카드를 쓴 스쿼드들의 가중치 합",
+    "ranking": "공식경기 1vs1",
+    "topN": 20,
+    "subWeight": 0.5,
+    "dropAlertRatio": 0.5
+  },
+  "weekly": {
+    "_comment": "4단계 평일·주말 분석. 평일 = 월~금, 주말 = 토·일 (KST 날짜 기준, 일별 가격 사용)",
+    "windowDays": 28,
+    "minWeekdayPoints": 10,
+    "minWeekendPoints": 4,
+    "repetitionWeeks": 8,
+    "minRepetitionWeeks": 4,
+    "transientPositiveRatio": 0.5,
+    "weeklyPositiveMinPct": 0.5
+  },
+  "stability": {
+    "_comment": "6단계 가격 안정성. 일별 가격 기준. CV = 표준편차 / 평균",
+    "shortDays": 7,
+    "longDays": 30,
+    "minShortPoints": 5,
+    "minLongPoints": 20,
+    "sharpMovePct": 15,
+    "sharpLookbackDays": 7,
+    "trendFlatPctPerDay": 0.5,
+    "persistentDeclinePct": -10,
+    "staleDays": 5
+  },
+  "dealScore": {
+    "_comment": "지표별 배점(합 100). 같은 가격대 그룹 안 백분위로 정규화. 데이터 없는 지표는 빼고 나머지 배점으로 다시 환산",
+    "weights": {
+      "popularity": 30,
+      "discount": 25,
+      "weekend": 25,
+      "stability": 20
+    },
+    "priceBandEdges": [
+      100000000,
+      200000000,
+      500000000,
+      1000000000,
+      2000000000,
+      5000000000,
+      10000000000
+    ],
+    "minGroupSize": 30,
+    "riskPenalty": {
+      "sharp_drop": 10,
+      "persistent_decline": 15,
+      "current_gap": 10
+    },
+    "popularityBlendTop200": 0.0,
+    "_popularityNormalization": "ratio_to_max = 그룹 최고점 대비 비율 (2026-11-24 결정) / percentile = 기획서 원안",
+    "popularityNormalization": "ratio_to_max"
+  },
+  "collection": {
+    "_comment": "매물 후보군 = 공식경기 랭커 1~universeTopN위가 최근 공식경기에 쓴 카드",
+    "universeTopN": 200,
+    "includeSubs": true,
+    "openApiMaxPerSecond": 4,
+    "openApiDailyCap": 900,
+    "datacenterMinIntervalSec": 1.0
+  },
+  "refresh": {
+    "_comment": "10단계 자동 갱신. quick = 보유 매물 + 활성 가격대 Deal Score 상위 quickTopN + 지금 매수/위험 판정 카드의 현재가. daily = 랭킹·스쿼드 + 전체 카드 가격",
+    "quickTopN": 100,
+    "recommendationLogTopN": 20,
+    "validationHorizonDays": 7
+  },
+  "rankerPick": {
+    "_comment": "랭커 픽 추천 (사용자 기준). fc-info 공식경기 팀컬러 순위 topTeams 위 안 팀의 포지션별 topRankPerPosition 위 카드와 같은 시즌, minGrade 강 이상, 지난 주말보다 쌈, 2시간 거래 minTransfers2h 건 이상",
+    "topTeams": 20,
+    "topRankPerPosition": 10,
+    "minGrade": 8,
+    "minTransfers2h": 5,
+    "minGradePicks": 3,
+    "transfersPerUnit": 5,
+    "weights": {
+      "transfers": 40,
+      "pickRate": 35,
+      "weekendDrop": 25
+    },
+    "collectEveryHours": 0,
+    "maxRisingMarketFetch": 210,
+    "priceMaxAgeHours": 20,
+    "maxMarketFetch": 120
+  },
+  "market": {
+    "_comment": "fionhub 상한가·하한가. 갱신 때 보유 매물 + Deal Score 상위 topN 장을 1초에 1번씩 받는다",
+    "topN": 30
+  },
+  "longTerm": {
+    "_comment": "탭3 고가 선수 장기투자 (fco/longterm.py). 상승 추세형(momentum) · 저평가 선점형(value) 독립 점수. 가중치 합 100",
+    "minPrice": 1000000000,
+    "popularRankMax": 20,
+    "buyScore": 75,
+    "nearFairPct": 0.02,
+    "marketFetchPerList": 30,
+    "momentumWeights": {"r7": 25, "r30": 25, "persist": 20, "pop": 15, "volume": 10, "risk": 5},
+    "valueWeights": {"pop": 25, "discount": 25, "unpriced": 20, "stability": 15, "volume": 10, "rebound": 5}
+  }
+}

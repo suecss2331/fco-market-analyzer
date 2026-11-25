@@ -1,0 +1,1639 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+  /* 화면 폭으로 모바일/PC 결정 (그리기 전에 적용해 깜빡임 방지). 'PC 화면으로 보기'를 고르면 그 기기에서 유지 */
+  (function () {
+    var pc = false; try { pc = localStorage.getItem("fco.view") === "pc"; } catch (e) {}
+    if (!pc && window.matchMedia("(max-width: 767px)").matches) document.documentElement.classList.add("m");
+  })();
+</script>
+<title>FC 매물 분석</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f3f0; --surface: #fcfcfb; --surface-2: #f0efec; --line: #e3e2dd; --grid: #e9e8e4;
+  --text: #0b0b0b; --text-2: #52514e; --text-3: #7a7974;
+  --series-1: #2a78d6; --band: #eeedea; --accent: #2a78d6;
+  --good: #0ca30c; --good-text: #006300; --warn: #fab219; --serious: #ec835a; --critical: #d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --line: #2f2f2c; --grid: #2a2a28;
+    --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86;
+    --series-1: #3987e5; --band: #222220; --accent: #3987e5; --good-text: #3fc23f;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --line: #2f2f2c; --grid: #2a2a28;
+  --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86;
+  --series-1: #3987e5; --band: #222220; --accent: #3987e5; --good-text: #3fc23f;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.5 "Pretendard", "Malgun Gothic", system-ui, sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+  padding: 14px 20px; background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+h1 { font-size: 17px; margin: 0; }
+h2 { font-size: 15px; margin: 0 0 10px; }
+.muted { color: var(--text-2); } .small { font-size: 12px; } .tiny { font-size: 11px; color: var(--text-3); }
+main { max-width: 1400px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.tile .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tile .l { font-size: 12px; color: var(--text-2); }
+.notice { border-left: 3px solid var(--warn); padding: 10px 12px; background: var(--surface); border-radius: 6px; }
+button, select, input { font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 9px; }
+button { cursor: pointer; } button:hover { border-color: var(--text-3); }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.tabs button[aria-selected="true"] { background: var(--text); color: var(--surface); border-color: var(--text); }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th { font-size: 12px; color: var(--text-2); font-weight: 600; position: sticky; top: 0; background: var(--surface); cursor: pointer; }
+th.l, td.l { text-align: left; }
+tbody tr { cursor: pointer; } tbody tr:hover { background: var(--surface-2); }
+.pos { color: var(--good-text); } .neg { color: var(--critical); }
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 99px; font-size: 11px;
+  border: 1px solid var(--line); color: var(--text); background: var(--surface-2); }
+.badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c, var(--text-3)); }
+.b-buy { --c: var(--good); } .b-risk { --c: var(--critical); } .b-wait { --c: var(--text-3); } .b-ins { --c: var(--warn); }
+.warn-list { display: flex; flex-wrap: wrap; gap: 4px; }
+td.tc { white-space: normal; min-width: 160px; max-width: 240px; }
+.wrapc { white-space: normal; min-width: 90px; max-width: 130px; }
+.cardcell > span:not(.face) { white-space: normal; min-width: 72px; }
+.cardcell, td.tc, .wrapc { word-break: keep-all; overflow-wrap: anywhere; }
+td.tc .warn-list { flex-direction: column; align-items: flex-start; }
+td.tc .badge, #rpBody .badge { display: inline-block; white-space: normal; text-align: left; line-height: 1.5; }
+.w { font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--serious); color: var(--text); }
+dialog { width: min(980px, 96vw); max-height: 92vh; border: 1px solid var(--line); border-radius: 12px; padding: 0;
+  background: var(--surface); color: var(--text); }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+.dlg-head { display: flex; justify-content: space-between; align-items: start; gap: 10px; padding: 14px 18px;
+  border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); z-index: 2; }
+.dlg-body { padding: 16px 18px; display: grid; gap: 16px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-variant-numeric: tabular-nums; }
+.kv div:nth-child(odd) { color: var(--text-2); } .kv div:nth-child(even) { text-align: right; }
+.face { position: relative; display: inline-block; width: var(--fs); height: var(--fs); flex: none; vertical-align: middle; }
+.face img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.face img.season { position: absolute; left: -2px; bottom: -2px; width: auto; height: 36%; max-width: 75%; object-fit: contain; }
+.pagetabs { margin-bottom: 14px; }
+.pagetabs button { font-weight: 600; padding: 8px 14px; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--text); text-decoration: underline dotted; }
+a.fci { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
+a.fci:hover { color: var(--series-1); }
+.cardcell { display: inline-flex; align-items: center; gap: 8px; text-align: left; }
+tr[data-s] { cursor: pointer; }
+.chartbox { position: relative; }
+.chartbox svg { width: 100%; height: auto; display: block; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; font-size: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.12); display: none; white-space: nowrap; }
+.settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.settings label { display: grid; gap: 4px; font-size: 12px; color: var(--text-2); }
+.settings input, .settings select { width: 100%; }
+details summary { cursor: pointer; font-weight: 600; }
+.formula { font-size: 13px; color: var(--text-2); }
+.formula li { margin: 3px 0; }
+.bar { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--series-1); border-radius: 3px; }
+@media (max-width: 640px) { header { padding: 12px 16px; } main { padding: 12px 16px; } }
+
+/* ===== 태블릿 (768~1023px): PC 화면을 기준으로 칸 배치만 조정 ===== */
+@media (min-width: 768px) and (max-width: 1023px) {
+  header { padding: 12px 16px; }
+  .grid2 { grid-template-columns: minmax(0, 1fr); }
+  .tiles { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .pagetabs button { padding: 8px 10px; font-size: 13px; }
+}
+
+#mobileViewBtn { display: none; }
+@media (max-width: 767px) { #mobileViewBtn { display: inline-block; } }   /* 좁은 화면에서 'PC 화면'을 골랐을 때 돌아가는 버튼 */
+/* ===== 모바일 (767px 이하, html.m): PC 화면은 숨기고 #mobile 을 보여 줌 ===== */
+#mobile { display: none; }
+html.m > body > header, html.m > body > main { display: none; }
+html.m #mobile { display: block; }
+html.m:not([data-theme="light"]) {   /* 모바일은 기본 다크 (TradingView 풍), 테마 버튼으로 밝게 가능 */
+  color-scheme: dark;
+  --bg: #0b0b0c; --surface: #17181a; --surface-2: #222326; --line: #2a2b2f; --grid: #26272a;
+  --text: #f2f2f0; --text-2: #b9b8b2; --text-3: #85847e; --band: #1d1e20;
+  --series-1: #3b8cf0; --accent: #3b8cf0; --good-text: #2fbf71; --critical: #f0524f;
+}
+html.m body { font-size: 15px; -webkit-text-size-adjust: 100%; }
+.m-top { position: sticky; top: 0; z-index: 6; background: var(--bg); padding: calc(10px + env(safe-area-inset-top)) 16px 8px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--line); }
+.m-top h1 { font-size: 17px; }
+.m-top .tiny { display: block; }
+.m-top .acts { display: flex; gap: 6px; flex: none; }
+.m-top button { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+.m-page { padding: 12px 16px calc(84px + env(safe-area-inset-bottom)); display: grid; gap: 12px; }
+.m-page[hidden] { display: none; }
+.m-sec-title { font-size: 13px; color: var(--text-2); font-weight: 600; margin: 6px 2px 0; display: flex; justify-content: space-between; align-items: center; }
+.m-hero { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.m-hero .l { font-size: 13px; color: var(--text-2); }
+.m-hero .v { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; margin-top: 2px; }
+.m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.m-stat { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.m-stat .l { font-size: 12px; color: var(--text-2); }
+.m-stat .v { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-chips { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
+.m-chips::-webkit-scrollbar { display: none; }
+.m-chips button { flex: none; border-radius: 99px; padding: 6px 12px; font-size: 13px; background: var(--surface); }
+.m-chips button[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+.m-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 10px; }
+.m-card:active { background: var(--surface-2); }
+.m-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.m-head .nm { flex: 1; min-width: 0; }
+.m-head .nm b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-head .nm span { font-size: 12px; color: var(--text-2); }
+.m-kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 10px; }
+.m-kv div { min-width: 0; }
+.m-kv .l { font-size: 11px; color: var(--text-3); }
+.m-kv .v { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-reason { font-size: 12px; color: var(--text-2); }
+.m-more { display: none; border-top: 1px solid var(--line); padding-top: 10px; gap: 8px; }
+.m-card.open .m-more { display: grid; }
+.m-more .row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.m-more .row span:first-child { color: var(--text-2); }
+.m-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.m-btns button { flex: 1; min-width: 70px; padding: 9px 6px; border-radius: 10px; }
+.vd { display: inline-block; padding: 3px 9px; border-radius: 8px; font-size: 12px; font-weight: 700; flex: none; }
+.vd-buy { background: rgba(47,191,113,.16); color: var(--good-text); }
+.vd-sell { background: rgba(59,140,240,.18); color: var(--series-1); }
+.vd-hold { background: var(--surface-2); color: var(--text-2); }
+.star { background: none; border: 0; font-size: 22px; line-height: 1; padding: 4px 2px; color: var(--text-3); flex: none; }
+.star.on { color: #f5b301; }
+.m-search { display: grid; gap: 8px; }
+.m-search input[type=search] { width: 100%; padding: 11px 12px; border-radius: 12px; font-size: 16px; background: var(--surface); }
+.m-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.m-filters select { width: 100%; padding: 8px 6px; border-radius: 10px; font-size: 14px; background: var(--surface); }
+.m-empty { text-align: center; color: var(--text-3); font-size: 13px; padding: 24px 0; }
+.m-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; display: grid; grid-template-columns: repeat(4, 1fr);
+  background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+.m-nav button { background: none; border: 0; border-radius: 0; padding: 9px 4px 8px; display: grid; justify-items: center; gap: 2px;
+  font-size: 11px; color: var(--text-3); }
+.m-nav button svg { width: 22px; height: 22px; }
+.m-nav button[aria-current="page"] { color: var(--text); font-weight: 700; }
+.m-nav button[aria-current="page"] svg { color: var(--accent); }
+.m-chart svg { width: 100%; height: auto; display: block; }
+html.m dialog { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; inset: 0; border-radius: 0; border: 0; overflow-x: hidden; }
+html.m .dlg-body { grid-template-columns: minmax(0, 1fr); }
+html.m .dlg-body .kv { grid-template-columns: minmax(0, auto) minmax(0, 1fr); }
+html.m .dlg-body .kv div { min-width: 0; white-space: normal; overflow-wrap: anywhere; word-break: keep-all; }
+html.m #rpBody .badge { white-space: normal; max-width: 100%; }
+html.m .tabs#rpRangeTabs button { padding: 5px 10px; }
+html.m .dlg-head { padding-top: calc(12px + env(safe-area-inset-top)); }
+html.m .dlg-body { padding: 14px 16px calc(24px + env(safe-area-inset-bottom)); }
+html.m .dlg-body .kv { font-size: 13px; }
+html.m #rpBody table { font-size: 12px; }
+html.m #rpBody .tablewrap, html.m #rpBody table { display: block; overflow-x: auto; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>FC 온라인 매물 분석</h1>
+    <div class="tiny" id="updated">불러오는 중…</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <span class="small muted" id="refreshState"></span>
+    <select id="refreshMode" title="갱신 범위">
+      <option value="quick">빠른 갱신 · 보유 매물+상위 후보 (2~4분)</option>
+      <option value="daily">전체 갱신 · 랭커 스쿼드+전체 카드 (40~50분)</option>
+    </select>
+    <button id="refreshBtn" class="primary" title="현재가를 다시 받고 이전 기록은 그대로 쌓아 둡니다">지금 갱신</button>
+    <label class="small muted">가격대 <select id="presetSel"></select></label>
+    <button id="themeBtn" title="밝기 전환">테마</button>
+    <button id="logoutBtn" title="이 기기에서 로그아웃">로그아웃</button>
+    <button id="mobileViewBtn" title="휴대폰용 화면으로">모바일 화면</button>
+  </div>
+</header>
+
+<main>
+  <nav class="tabs pagetabs" id="pageTabs" role="tablist">
+    <button role="tab" data-p="1">1 · 보유 · 랭커 픽 추천</button>
+    <button role="tab" data-p="2">2 · 선수 검색 · 자금 배분</button>
+    <button role="tab" data-p="3">3 · 고가 선수 장기투자</button>
+    <button role="tab" data-p="4">4 · 검증 · 갱신 기록 · 설정</button>
+  </nav>
+
+  <div class="page" data-page="1">
+  <section class="tiles" id="tiles"></section>
+  <div class="notice small" id="notice"></div>
+
+  <section class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <h2 style="margin:0">내 보유 매물</h2>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="tiny" id="mkMsg"></span>
+        <button id="mkBtn" title="fionhub 이적시장 상한가·하한가를 지금 받아 옵니다 (카드 1장당 1~2초)">상한가 지금 확인</button>
+        <button id="addHoldBtn" class="primary">보유 매물 추가</button>
+      </div>
+    </div>
+    <div class="tiles" id="pfTiles" style="margin:12px 0"></div>
+    <div class="tablewrap"><table id="pfTable"></table></div>
+    <details style="margin-top:12px"><summary class="small">매도 기록 · 실현 손익</summary>
+      <div class="small muted" id="tradeSummary" style="margin:8px 0"></div>
+      <div class="tablewrap"><table id="tradeTable" class="small"></table></div>
+    </details>
+  </section>
+
+  <section class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <h2 style="margin:0">수수료 쿠폰</h2>
+      <button id="addCouponBtn" class="primary">쿠폰 추가</button>
+    </div>
+    <div class="small muted" id="cpSummary" style="margin:8px 0"></div>
+    <div class="tablewrap"><table id="cpTable" class="small"></table></div>
+    <h3 style="font-size:14px;margin:16px 0 6px">쿠폰 사용 추천 — 큰 쿠폰은 비싼 판매에</h3>
+    <div class="small muted" id="cpPlanDesc"></div>
+    <div class="tablewrap"><table id="cpPlan" class="small"></table></div>
+    <h3 style="font-size:14px;margin:16px 0 6px">쿠폰이 있으면 수익이 나는 매수 후보</h3>
+    <div class="tabs" id="cpTierTabs"></div>
+    <div class="small muted" id="cpTierDesc"></div>
+    <div class="tablewrap"><table id="cpTier" class="small"></table></div>
+  </section>
+
+  <section class="card">
+    <h2 style="margin-bottom:4px">랭커 픽 추천</h2>
+    <div class="small muted" id="rpDesc"></div>
+    <div class="tablewrap" style="max-height:620px;overflow:auto;margin-top:8px"><table id="rpTable"></table></div>
+    <details style="margin-top:10px"><summary class="small">거래량만 모자란 카드 (2시간 거래 기준 미달)</summary>
+      <div class="tablewrap"><table id="rpNear" class="small"></table></div></details>
+  </section>
+  </div>
+
+  <div class="page" data-page="2" hidden>
+  <section class="card">
+    <h2 style="margin-bottom:6px">선수 검색</h2>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="cardSearch" placeholder="선수명 · 시즌 (예: 카카, 워커 WS)" style="min-width:260px" autocomplete="off">
+      <span class="small muted" id="cardSearchMsg">가격을 받은 적 있는 카드(시즌·강화)에서 찾습니다. 누르면 선수 창이 열립니다.</span>
+    </div>
+    <div class="tablewrap" style="max-height:480px;overflow:auto;margin-top:8px"><table id="cardSearchTable" class="small"></table></div>
+  </section>
+
+  <section class="card">
+    <h2>투자 자금 배분</h2>
+    <div class="small muted" id="allocSummary"></div>
+    <div class="tablewrap"><table id="allocTable"></table></div>
+    <details style="margin-top:10px"><summary class="small">배분하지 않은 랭커 픽 추천 카드와 이유</summary>
+      <div class="tablewrap"><table id="allocSkipped" class="small"></table></div></details>
+  </section>
+
+  <section class="card">
+    <h2 style="margin-bottom:4px">인기 급등 선수 (fc-info · 인기 팀컬러 20위)</h2>
+    <div class="small muted" id="riseDesc"></div>
+    <div class="tabs" id="riseFilter" style="margin-top:8px"></div>
+    <div class="tablewrap" style="max-height:640px;overflow:auto;margin-top:4px"><table id="riseTable"></table></div>
+  </section>
+  </div>
+
+  <div class="page" data-page="3" hidden>
+  <section class="card">
+    <h2 style="margin-bottom:4px">고가 선수 장기투자 (10억 BP 이상)</h2>
+    <div class="small muted" id="ltDesc">불러오는 중…</div>
+    <div id="ltHeld" style="margin-top:10px"></div>
+  </section>
+  <section class="card">
+    <h2 style="margin-bottom:4px">① 상승 추세형 (Momentum Score)</h2>
+    <div class="small muted" id="ltMomDesc"></div>
+    <div class="tabs" id="ltMomFilter" style="margin-top:8px"></div>
+    <div class="tablewrap" style="max-height:640px;overflow:auto;margin-top:4px"><table id="ltMom"></table></div>
+  </section>
+  <section class="card">
+    <h2 style="margin-bottom:4px">② 저평가 선점형 (Value Score)</h2>
+    <div class="small muted" id="ltValDesc"></div>
+    <div class="tabs" id="ltValFilter" style="margin-top:8px"></div>
+    <div class="tablewrap" style="max-height:640px;overflow:auto;margin-top:4px"><table id="ltVal"></table></div>
+  </section>
+  <section class="card">
+    <h2 style="margin-bottom:4px">거래 많은 순 TOP 15</h2>
+    <div class="small muted" id="ttDesc"></div>
+    <div class="tabs" id="ttFilter" style="margin-top:8px"></div>
+    <div class="tablewrap"><table id="ttTable"></table></div>
+  </section>
+  </div>
+
+  <div class="page" data-page="4" hidden>
+  <section class="card">
+    <h2 style="margin-bottom:6px">외부 접속 (휴대폰)</h2>
+    <div class="small" id="tunnelBox">확인 중…</div>
+  </section>
+
+  <section class="card">
+    <h2 style="margin-bottom:6px">카카오톡 알림 (나에게 보내기)</h2>
+    <div class="small" id="kakaoBox">확인 중…</div>
+    <details style="margin-top:10px"><summary class="small">처음 설정하는 법 (PC에서 한 번)</summary>
+      <ol class="small muted" style="margin:8px 0 0;padding-left:18px;line-height:1.7">
+        <li><a href="https://developers.kakao.com/console/app" target="_blank" rel="noopener">카카오디벨로퍼스 앱 관리</a>에 카카오 계정으로 로그인 → <b>앱 생성</b> (앱 이름 · 회사명은 아무거나, 예: FC 매물 알림 / 개인)</li>
+        <li>만든 앱 → <b>[앱] › [플랫폼 키] › [REST API 키]</b> 를 눌러 키 설정 화면으로 →
+          <br>① <b>REST API 키</b> 값 복사 → 아래 'REST API 키' 칸에
+          <br>② <b>리다이렉트 URI</b> 에 <code>http://localhost:8765/kakao/callback</code> 추가 → 저장
+          <br>③ <b>클라이언트 시크릿</b> 의 <b>코드</b> 복사 → 아래 '클라이언트 시크릿' 칸에 (새 키는 기본으로 켜져 있어 꼭 필요)</li>
+        <li><b>[카카오 로그인] › [사용 설정]</b> → 상태 <b>ON</b></li>
+        <li><b>[카카오 로그인] › [동의항목] › [접근권한]</b> → <b>카카오톡 메시지 전송</b> 행의 [설정] → <b>선택 동의</b>, 동의 목적 아무거나 (예: 나에게 알림) → 저장</li>
+        <li><b>[앱] › [제품 링크 관리] › [웹 도메인]</b> → <code>http://localhost:8765</code> 추가 (메시지 버튼 링크용)</li>
+        <li>아래 칸에 키 두 개를 넣고 <b>키 저장</b> → <b>카카오 연결</b> → 카카오 로그인 · '카카오톡 메시지 전송' 동의 → <b>테스트 보내기</b> (이 PC 브라우저에서)</li>
+      </ol>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>추천 검증 (랭커 픽 추천의 실제 수익률)</h2>
+    <div class="small muted" id="valSummary"></div>
+    <div class="tablewrap" style="max-height:640px;overflow:auto;margin-top:8px"><table id="valTable" class="small"></table></div>
+  </section>
+
+  <section class="card">
+    <h2>갱신 기록</h2>
+    <div class="tablewrap"><table id="logTable" class="small"></table></div>
+  </section>
+
+  <section class="card">
+    <h2>설정</h2>
+    <div class="settings" id="settingsForm"></div>
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+      <button class="primary" id="saveBtn">저장하고 다시 계산</button>
+      <span class="small muted" id="saveMsg"></span>
+    </div>
+  </section>
+
+  <section class="card formula">
+    <details>
+      <summary>계산식 전체 보기</summary>
+      <ul>
+        <li><b>평일·주말 평균</b>: 최근 28일 일별 가격(데이터센터, 하루 1개 값) 중 월~금 / 토·일의 평균·중앙값.</li>
+        <li><b>주말 프리미엄</b> = (주말 평균 − 평일 평균) ÷ 평일 평균. 반복성: 최근 8번의 주말을 앞뒤 평일과 비교해 오른 주 수를 셈. 절반 미만이면 '일시적'.</li>
+        <li><b>할인율</b> = (평일 평균 − 현재가) ÷ 평일 평균.</li>
+        <li><b>인기 스쿼드 점수</b>: 공식경기 1~20위 스쿼드, 1위 20점 … 20위 1점(교체 ×0.5)의 합. 만점 210.</li>
+        <li><b>가격 안정성</b>: 30일 CV = 표준편차 ÷ 평균(낮을수록 안정). 급락/급등 = 최근 7일 하루 ±15%, 지속 하락 = 30일 −10% 이하 + 하락 추세, 정체 = 같은 값 5일 이상.</li>
+        <li><b>매수 적정가</b> = 평일 평균 × 할인 계수(30일 CV 0.05 → 0.98, 0.30 → 0.90 선형).</li>
+        <li><b>예상 매도가</b> = 평일 평균 × (1 + 사용 주말 프리미엄). 사용 프리미엄 = max(0, min(공식 프리미엄, 주별 중앙값)), 일시적이면 0.</li>
+        <li><b>순수익</b> = 매도가 × (1 − 수수료율) − 매수가. <b>ROI</b> = 순수익 ÷ 매수가. <b>손익분기 매도가</b> = 매수가 ÷ (1 − 수수료율).</li>
+        <li><b>목표 매수가</b> = min(매수 적정가, 예상 매도가 × (1 − 수수료율) ÷ (1 + 최소 목표 수익률)).</li>
+        <li><b>판정</b>: 지금 매수 가능 = 현재가 ≤ 목표 매수가 + 위험 없음 / 위험 = 현재가 ≤ 목표가지만 급락·지속하락·정체·당일급락 / 대기 = 현재가 &gt; 목표가.</li>
+        <li><b>Deal Score</b>: 인기 30 · 할인 25 · 주말 25 · 안정 20. 가격대 그룹 안 백분위(인기만 그룹 최고점 대비 비율). 데이터 없는 지표는 빼고 재환산. 위험 감점 급락 −10, 지속 하락 −15, 당일 급락 −10.</li>
+        <li><b>총 운용 BP</b> = 보유한 순 BP + 보유 매물 현재 평가액(현재가 × 수량). 지금 팔면 받는 BP = 평가액 × (1 − 수수료율).</li>
+        <li><b>자금 배분 (랭커 픽 기준)</b>: 랭커 픽 추천 점수 순. 매수가 = 현재가, 예상 매도가 = 지난 주말 평균. 수수료 20%로 순익 ≥ 매수가 × 목표 수익률이면 쿠폰 없이, 아니면 가장 큰 쿠폰을 쓰면 넘는 경우 쿠폰 매수(1장 판매에 1장, 남은 쿠폰 안에서). 카드당 한도 = 총 운용 BP × 최대 비중 − 그 카드 보유 평가액. 수량 = ⌊min(한도, 남은 순 BP) ÷ 매수가⌋, 단 카드당 최대 수량 · 2시간 거래 ÷ 5 · 남은 쿠폰 이하.</li>
+        <li><b>랭커 픽 추천</b>: fc-info 공식경기 인기 팀컬러 20위 팀의 포지션별 10위 카드와 같은 시즌 · 8강 이상(랭커 3명 이상 사용) · 현재가 &lt; 지난 주말 평균 · 2시간 거래 ≥ 5건. 점수 = 거래량 40 (로그) + 픽률 35 + 주말 대비 하락 25, 후보 중 최고값 대비 비율.</li>
+        <li><b>보유 매물 평가 손익</b> = 현재가 × (1 − 수수료율) × 수량 − 매수가 × 수량. <b>실현 손익</b> = 매도가 × (1 − 수수료율) × 수량 − 매수가 × 수량.</li>
+        <li><b>판매 수수료</b> = 기본 40% × (1 − PC방 30% − TOP CLASS 20% − 쿠폰). 할인은 곱하지 않고 더하며 0 밑으로 내려가지 않음 (FC STATS 수수료 계산기 안내, 이벤트로 바뀔 수 있음).</li>
+        <li><b>쿠폰 절약</b> = 판매가 × 기본 수수료 × min(쿠폰, 남은 할인 여지). 판매가에 비례하므로 큰 쿠폰을 비싼 판매에 짝지을 때 총 절약이 최대.</li>
+        <li><b>탭3 장기투자 (10억 이상)</b>: 상승 추세형 = 7일 상승률 25 (+15%에서 만점) · 30일 상승률 25 (+40%에서 만점) · 상승 지속성 20 (30일 log 가격 회귀 R² 50% + 최근 4주 중 오른 주 50%, 최근 10일 꺾이면 ×0.6 · 둔화면 ×0.85) · 인기 순위 15 · 거래량·매물 10 · 급등 위험 5 (7일 +15% 넘으면 감점, 30일 +80% 넘으면 감점, 하루 급등 이력이면 최대 0.3). 저평가 선점형 = 인기 순위 25 · 고점 대비 할인 25 (5%→0, 40%→만점) · 상승 미반영 20 (인기 점수 − 30일 상승 비율, 인기 급등 선수 +0.2) · 14일 안정성 15 (CV 0.10 이하일수록, 14일 −5% 넘게 빠지면 ×0.5) · 거래량·매물 10 · 반등 신호 5. 인기 순위 = fc-info 인기 팀컬러 20위 팀의 포지션 순위 중 최고 (1위 1.00 ~ 10위 0.82, 11~15위 0.72~0.60, 순위권 밖 0.15). 데이터 없는 항목은 빼고 100점 환산. 등급 S 85↑ · A 75↑ · B 65↑ · C 50↑ · D. 매수 적정가: 상승형 = 7일 평균을 현재가 −3~−5% 사이로 (과열이면 7일 평균까지 대기), 저평가형 = (14일 최저 + 14일 중앙값) ÷ 2 (기록 30일 미만 · 14일 CV 0.15 초과면 '분석 데이터 부족').</li>
+        <li><b>추천 검증</b>: 갱신할 때마다 그날 처음 추천된 랭커 픽 카드를 그때 현재가로 기록하고, 그 뒤 첫 주말(토·일) 일별 가격 평균에 판 것으로 채점 (수수료 / 쿠폰 두 가지).</li>
+      </ul>
+      <p class="tiny">일별 가격은 하루 평균이라 실제 이적시장 체결가와 다를 수 있습니다. 매수 전 게임에서 매물 가격을 직접 확인하세요.</p>
+    </details>
+  </section>
+  </div>
+</main>
+
+<!-- ===== 모바일 화면 (767px 이하). 데이터·계산은 PC 화면과 같은 API 를 쓴다 ===== -->
+<div id="mobile">
+  <div class="m-top">
+    <div style="min-width:0"><h1>FC 매물 분석</h1><span class="tiny" id="mUpdated">불러오는 중…</span></div>
+    <div class="acts"><button id="mQuick" class="primary" title="보유 매물 + 추천 후보 시세 다시 받기 (2~4분)">빠른 갱신</button><button id="mRefresh" title="보유 매물 상한가만 바로 다시 받기">상한가</button></div>
+  </div>
+
+  <section class="m-page" data-m="1">
+    <div class="m-hero" id="mSummary"></div>
+    <div class="m-sec-title"><span>보유 선수</span><button id="mAddHold" style="font-size:12px;padding:5px 10px;border-radius:8px">+ 추가</button></div>
+    <div class="m-chips" id="mHoldSort"></div>
+    <div id="mHoldList" style="display:grid;gap:10px"></div>
+  </section>
+
+  <section class="m-page" data-m="2" hidden>
+    <div class="m-search">
+      <input type="search" id="mQ" placeholder="선수명 검색 (예: 카카)" autocomplete="off" enterkeyhint="search">
+      <div class="m-filters">
+        <select id="mSeason" aria-label="시즌"><option value="">시즌 전체</option></select>
+        <select id="mGrade" aria-label="강화"><option value="">강화 전체</option></select>
+        <select id="mPrice" aria-label="가격대">
+          <option value="">가격 전체</option><option value="0-1e8">~1억</option><option value="1e8-3e8">1~3억</option>
+          <option value="3e8-5e8">3~5억</option><option value="5e8-1e9">5~10억</option><option value="1e9-">10억~</option>
+        </select>
+      </div>
+      <div class="m-chips" id="mMode"></div>
+      <div class="m-chips" id="mSort"></div>
+    </div>
+    <div class="tiny" id="mSearchMsg"></div>
+    <div id="mResults" style="display:grid;gap:10px"></div>
+  </section>
+
+  <section class="m-page" data-m="3" hidden>
+    <div class="m-hero" id="mTradeSummary"></div>
+    <div class="m-chips" id="mPeriod"></div>
+    <div class="m-hero" id="mPeriodBox"></div>
+    <div class="m-sec-title"><span>거래 내역</span><span class="tiny" id="mTradeCount"></span></div>
+    <div id="mTrades" style="display:grid;gap:10px"></div>
+    <div class="m-sec-title"><span>추천 검증</span></div>
+    <div class="m-hero small" id="mVal"></div>
+    <div class="m-sec-title"><span>외부 접속</span></div>
+    <div class="m-hero small" id="mTunnel"></div>
+    <div class="m-btns">
+      <button id="mTheme">밝기 전환</button><button id="mPcView">PC 화면으로 보기</button><button id="mLogout">로그아웃</button>
+    </div>
+    <div class="tiny" style="text-align:center">설정 · 계산식 · 갱신 기록은 PC 화면 3탭에 있습니다.</div>
+  </section>
+
+  <section class="m-page" data-m="4" hidden>
+    <div class="m-hero small" id="mLtDesc"></div>
+    <div class="m-chips" id="mLtKind"></div>
+    <div class="m-chips" id="mLtFilter"></div>
+    <div id="mLtList" style="display:grid;gap:10px"></div>
+    <div class="m-sec-title"><span>거래 많은 순 TOP 15</span><span class="tiny">2시간 거래</span></div>
+    <div class="m-chips" id="mTtFilter"></div>
+    <div class="m-hero" id="mTtList" style="padding:6px 12px"></div>
+  </section>
+
+  <nav class="m-nav" id="mNav" aria-label="화면 이동">
+    <button data-m="1" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>보유 현황</button>
+    <button data-m="2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>검색 · 매수</button>
+    <button data-m="3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/></svg>매매 분석</button>
+    <button data-m="4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>장기투자</button>
+  </nav>
+</div>
+
+<dialog id="rpDlg" style="width:min(640px,96vw)">
+  <div class="dlg-head"><div><div id="rpTitle" style="font-weight:700;font-size:16px"></div><div class="small muted" id="rpSub"></div></div><button id="rpClose">닫기</button></div>
+  <div class="dlg-body">
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <b>시세 그래프</b><div class="tabs" id="rpRangeTabs" style="margin:0"></div>
+      </div>
+      <div class="chartbox"><svg id="rpChart" viewBox="0 0 760 300" role="img"></svg><div class="tip" id="rpTip"></div></div>
+      <div class="tiny">선 = 넥슨 일별 가격 · 점 = 현재가 관측(데이터센터·fionhub) · 회색 띠 = 주말 · 점선 = 지난 주말 평균·하한가·상한가</div>
+    </div>
+    <div id="rpBody"></div>
+  </div>
+</dialog>
+<dialog id="formDlg" style="width:min(520px,96vw)">
+  <div class="dlg-head"><div id="fTitle" style="font-weight:700"></div><button id="fClose">닫기</button></div>
+  <form class="dlg-body" id="fForm" method="dialog"></form>
+</dialog>
+
+<dialog id="dlg">
+  <div class="dlg-head">
+    <div><div id="dTitle" style="font-weight:700;font-size:16px"></div><div class="small muted" id="dSub"></div></div>
+    <button id="dClose">닫기</button>
+  </div>
+  <div class="dlg-body">
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <b>일별 가격</b>
+        <div class="tabs" id="rangeTabs" style="margin:0"></div>
+      </div>
+      <div class="chartbox" id="chartBox"><svg id="chart" viewBox="0 0 760 300" role="img"></svg><div class="tip" id="tip"></div></div>
+      <div class="tiny">회색 띠 = 주말(토·일). 점선 = 평일 평균·매수 적정가·목표 매수가·예상 매도가. 점 = 현재가 관측.</div>
+    </div>
+    <div class="grid2">
+      <div><b>가격·수익</b><div class="kv small" id="dPrice" style="margin-top:6px"></div></div>
+      <div><b>Deal Score 산출 근거</b><div id="dScore" style="margin-top:6px"></div></div>
+    </div>
+    <div class="grid2">
+      <div><b>평일·주말 / 안정성</b><div class="kv small" id="dStats" style="margin-top:6px"></div></div>
+      <div><b>인기 스쿼드 근거</b><div id="dSquads" class="small" style="margin-top:6px"></div></div>
+    </div>
+    <div class="tablewrap"><details open><summary class="small">현재가 갱신 기록 (갱신할 때마다 쌓임)</summary><table id="dCurTable" class="small"></table></details></div>
+    <div class="tablewrap"><details><summary class="small">일별 가격 표 보기</summary><table id="dTable" class="small"></table></details></div>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const bp = (v) => {
+  if (v == null || isNaN(v)) return "-";
+  const a = Math.abs(v), s = v < 0 ? "−" : "";
+  if (a >= 1e8) return s + (a / 1e8).toFixed(2) + "억";
+  if (a >= 1e4) return s + Math.round(a / 1e4).toLocaleString() + "만";
+  return s + Math.round(a).toLocaleString();
+};
+/* "1.5억", "3500만", "1억 2000만", "150,000,000" → BP 정수. 읽을 수 없으면 null */
+const parseBP = (s) => {
+  s = String(s ?? "").replace(/[,\s]/g, "").replace(/BP$/i, "");
+  if (!s) return null;
+  if (/^\d+(\.\d+)?$/.test(s)) return Math.round(+s);
+  const m = s.match(/^(?:(\d+(?:\.\d+)?)억)?(?:(\d+(?:\.\d+)?)만)?(\d+)?$/);
+  if (!m || (!m[1] && !m[2])) return null;
+  return Math.round((+(m[1] || 0)) * 1e8 + (+(m[2] || 0)) * 1e4 + (+(m[3] || 0)));
+};
+const bpInput = (v) => v == null ? "" : (v >= 1e8 ? +(v / 1e8).toFixed(4) + "억" : v >= 1e4 ? +(v / 1e4).toFixed(2) + "만" : String(v));
+const pct = (v, d = 1) => (v == null || isNaN(v)) ? "-" : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(d) + "%";
+const cls = (v) => v == null ? "" : v > 0 ? "pos" : v < 0 ? "neg" : "";
+const season = (c) => (c || "").split(" (")[0];
+const VERDICT = { buy_now: ["지금 매수 가능", "b-buy"], risky: ["위험(회복 가정)", "b-risk"], wait: ["목표가 대기", "b-wait"], insufficient: ["데이터 부족", "b-ins"] };
+const FLAG = { sharp_drop: "최근 급락", persistent_decline: "지속 하락", stale: "가격 정체", current_gap: "당일 급락" };
+const verdictBadge = (v) => `<span class="badge ${VERDICT[v][1]}">${VERDICT[v][0]}</span>`;
+const api = async (path, opts) => {
+  const r = await fetch(path, opts);
+  if (r.status === 401) { location.replace("/login"); throw new Error("로그인이 필요합니다"); }  // 쿠키 만료 · 로그아웃
+  const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j;
+};
+
+$("logoutBtn").onclick = async () => {
+  await fetch("/api/logout", { method: "POST", headers: { "Content-Type": "application/json", "X-FCO-Request": "1" }, body: "{}" });
+  location.replace("/login");
+};
+
+/* theme toggle (per-viewer convenience) */
+(() => { try { const t = localStorage.getItem("fco-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {} })();
+$("themeBtn").onclick = () => {
+  const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const nxt = cur === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = nxt;
+  try { localStorage.setItem("fco-theme", nxt); } catch (e) {}
+  if (state.detail) drawChart();
+};
+
+const state = { cards: [], tab: "top", sort: null, detail: null, range: 90, settings: null };
+
+const COLS = [
+  ["player_name", "선수명", "l", (c) => esc(c.player_name ?? "(이름 없음)")],
+  ["class_name", "시즌", "l", (c) => esc(season(c.class_name))],
+  ["grade", "강화", "", (c) => c.grade + "강"],
+  ["ovr", "OVR", "", (c) => c.ovr ?? "-"],
+  ["current_price", "현재가", "", (c) => bp(c.current_price)],
+  ["mk_upper", "하한가 / 상한가", "", (c) => c.mk_upper ? `${bp(c.mk_lower)} / ${bp(c.mk_upper)}<div class="tiny">상한 대기 ${c.mk_buy_at_upper}건 · 2시간 ${c.mk_transfers_2h ?? "-"}건</div>` : `<span class="tiny">-</span>`],
+  ["chg", "직전 갱신 대비", "",(c) => c.prev_price ? `<span class="${cls(c.current_price - c.prev_price)}">${pct((c.current_price - c.prev_price) / c.prev_price * 100)}</span>` : `<span class="tiny">기록 1회</span>`],
+  ["wd_mean", "평일 평균", "", (c) => bp(c.wd_mean)],
+  ["we_mean", "주말 평균", "", (c) => bp(c.we_mean)],
+  ["premium_pct", "주말 프리미엄", "", (c) => `<span class="${cls(c.premium_pct)}">${pct(c.premium_pct)}</span>`],
+  ["pop_score", "인기 점수", "", (c) => c.pop_score ? c.pop_score.toFixed(1) : "0"],
+  ["l_cv", "안정성(CV)", "", (c) => c.l_cv == null ? "-" : c.l_cv.toFixed(3) + (c.stale ? " 정체" : "")],
+  ["deal_score", "Deal Score", "", (c) => c.deal_score == null ? "-" : `<b>${c.deal_score.toFixed(1)}</b>`],
+  ["buy_fair", "매수 적정가", "", (c) => bp(c.buy_fair)],
+  ["target_buy", "목표 매수가", "", (c) => bp(c.target_buy)],
+  ["sell_expected", "예상 매도가", "", (c) => bp(c.sell_expected)],
+  ["net_at_current", "순수익(현재가)", "", (c) => `<span class="${cls(c.net_at_current)}">${bp(c.net_at_current)}</span>`],
+  ["roi_at_current_pct", "예상 ROI", "", (c) => `<span class="${cls(c.roi_at_current_pct)}">${pct(c.roi_at_current_pct)}</span>`],
+  ["verdict", "판정", "l", (c) => verdictBadge(c.verdict)],
+];
+
+const noRisk = (c) => !c.risk_flags;
+const TABS = {
+  top: ["Deal Score TOP 20", "Deal Score 높은 순 20장", (cs) => cs.slice(0, 20)],
+  weekend: ["평일 매수 / 주말 매도 후보", "주말 프리미엄이 매주 반복되고 위험 표시 없는 카드 (주말 상승 주 비율 → 주별 중앙값 순)",
+    (cs) => cs.filter((c) => c.premium_used_pct > 0 && c.transient === 0 && noRisk(c))
+      .sort((a, b) => (b.weeks_positive / b.weeks_total) - (a.weeks_positive / a.weeks_total) || b.weekly_premium_median_pct - a.weekly_premium_median_pct)],
+  under: ["현재 저평가", "현재가 < 평일 평균, 위험 표시 없음 (할인율 큰 순)",
+    (cs) => cs.filter((c) => c.discount_pct > 0 && noRisk(c)).sort((a, b) => b.discount_pct - a.discount_pct)],
+  stable: ["가격 안정성 높음", "30일 CV 낮은 순 (가격 정체·급변 카드 제외)",
+    (cs) => cs.filter((c) => c.l_cv != null && noRisk(c)).sort((a, b) => a.l_cv - b.l_cv)],
+  risk: ["위험 경고", "급락·지속 하락·정체·당일 급락·인기 순위 급락",
+    (cs) => cs.filter((c) => c.risk_flags || c.drop_alert === 1)],
+  all: ["전체", "활성 가격대 전체 카드", (cs) => cs],
+};
+
+function renderTabs() {
+  $("tabs").innerHTML = Object.entries(TABS).map(([k, [name]]) => {
+    const n = TABS[k][2](state.cards).length;
+    return `<button role="tab" aria-selected="${k === state.tab}" data-k="${k}">${name} <span class="tiny">${k === "top" ? Math.min(20, n) : n}</span></button>`;
+  }).join("");
+  $("tabs").querySelectorAll("button").forEach((b) => b.onclick = () => { state.tab = b.dataset.k; state.sort = null; renderTabs(); renderTable(); });
+}
+
+function renderTable() {
+  const [, desc, fn] = TABS[state.tab];
+  $("tabDesc").textContent = desc;
+  const q = $("search").value.trim().toLowerCase();
+  let rows = fn(state.cards);
+  if (q) rows = rows.filter((c) => ((c.player_name || "") + " " + (c.class_name || "")).toLowerCase().includes(q));
+  if (state.sort) {
+    const [k, dir] = state.sort;
+    rows = [...rows].sort((a, b) => { const x = a[k], y = b[k]; if (x == null) return 1; if (y == null) return -1; return (x > y ? 1 : x < y ? -1 : 0) * dir; });
+  }
+  const head = `<thead><tr>${COLS.map(([k, t, a]) => `<th class="${a}" data-k="${k}">${t}${state.sort && state.sort[0] === k ? (state.sort[1] > 0 ? " ▲" : " ▼") : ""}</th>`).join("")}<th class="l">경고</th></tr></thead>`;
+  const body = rows.map((c) => `<tr data-s="${c.spid}" data-g="${c.grade}">${COLS.map(([, , a, f]) => `<td class="${a}">${f(c)}</td>`).join("")}<td class="l"><div class="warn-list">${(c.warnings || "").split(",").filter(Boolean).map((w) => `<span class="w">${esc(w)}</span>`).join("")}</div></td></tr>`).join("");
+  $("mainTable").innerHTML = head + `<tbody>${body || `<tr><td class="l" colspan="${COLS.length + 1}">해당 카드 없음</td></tr>`}</tbody>`;
+  $("mainTable").querySelectorAll("th[data-k]").forEach((th) => th.onclick = () => {
+    const k = th.dataset.k; state.sort = state.sort && state.sort[0] === k ? [k, -state.sort[1]] : [k, -1]; renderTable();
+  });
+  $("mainTable").querySelectorAll("tbody tr[data-s]").forEach((tr) => tr.onclick = () => openDetail(+tr.dataset.s, +tr.dataset.g));
+}
+/* ---------- 선수 미니페이스 (넥슨 공식 CDN) ---------- */
+const CDN = "https://fco.dn.nexoncdn.co.kr/live/externalAssets/common";
+// 시즌 카드 이미지 (playersAction/p{spid}) → 없으면 선수 기본 얼굴 (players/p{선수번호})
+// fc-info 랭커 픽: 팀컬러 페이지의 그 포지션 (L·RM 은 SIDE)
+const fcinfoUrl = (team, pos) => `https://fc-info.com/ranker-pick/official/${encodeURIComponent(team)}${pos ? "?pos=" + (pos === "L·RM" ? "SIDE" : encodeURIComponent(pos)) : ""}`;
+const posName = (p) => p === "SIDE" ? "L·RM" : p;  // fc-info 내부 표기 SIDE = L·RM
+const fcLink = (team, pos, text) => `<a class="fci" href="${fcinfoUrl(team, pos)}" target="_blank" rel="noopener" title="fc-info 랭커 픽: ${esc(team)}${pos ? " " + esc(pos) : ""}">${text}</a>`;
+const face = (spid, size = 29) => !spid ? "" : `<span class="face" style="--fs:${size}px"><img loading="lazy" alt="" src="${CDN}/playersAction/p${spid}.png" onerror="this.onerror=null;this.src='${CDN}/players/p${spid % 1000000}.png'">` +
+  (state.classes?.[Math.floor(spid / 1e6)] ? `<img class="season" loading="lazy" alt="" src="${esc(state.classes[Math.floor(spid / 1e6)])}">` : "") + `</span>`;
+const cardCell = (spid, name, cls_, grade) => `<span class="cardcell">${face(spid)}<span>${esc(name ?? "(이름 없음)")}<div class="tiny">${esc(season(cls_))} ${grade}강</div></span></span>`;
+
+// 어디에 있는 선수든 행을 누르면 랭커 픽 창 (data-s, data-g 가 있는 행). 버튼 클릭은 제외.
+document.addEventListener("click", (e) => {
+  if (e.target.closest("button, a, input, select, dialog")) return;
+  const tr = e.target.closest("tr[data-s][data-g]");
+  if (tr) openCard(+tr.dataset.s, +tr.dataset.g);
+});
+async function openCard(spid, grade, extra) {
+  const r = await api(`/api/cardview?spid=${spid}&grade=${grade}`);
+  state.rpMeta = { fee: r.fee, coupon: r.coupon, config: r.config };
+  openRankerPick(Object.assign(r.card, extra || {}));  // extra: 랭커 픽 점수 (추천 표에서 열 때)
+}
+
+function renderOverview(o) {
+  const u = o.updated;
+  $("updated").textContent = `가격 갱신 ${(u.prices || "-").replace("T", " ").slice(0, 16)} · 일별 가격 ~${u.daily_end || "-"} · 랭킹 ${(u.ranking || "-").replace("T", " ").slice(0, 16)} · 분석 ${(u.analysis || "-").replace("T", " ").slice(0, 16)}`;
+  const v = o.verdicts;
+  state.overview = o;
+  const tiles = [
+    ["총 운용 BP", bp(o.total_bp), `순 BP ${bp(o.cash)} + 보유 매물 ${bp(o.holdings_value)} (${o.holdings_count}건)`],
+    ["분석 가능 카드", `${o.cards_in_range.toLocaleString()}장`, `${o.preset} 구간 · 전체 ${o.cards_total.toLocaleString()}장`],
+    ["지금 매수 가능", `${v.buy_now}장`, "현재가 ≤ 목표가, 위험 없음"],
+    ["위험(회복 가정)", `${v.risky}장`, "싸 보이지만 급락·하락 중"],
+    ["목표가 대기", `${v.wait}장`, "현재가 > 목표 매수가"],
+    ["수수료 / 목표 ROI", `${(o.fee * 100).toFixed(0)}% / ${(o.min_target_roi * 100).toFixed(0)}%`, `본전 = 매수가 × ${(1 / (1 - o.fee)).toFixed(3)}`],
+  ];
+  $("tiles").innerHTML = tiles.map(([l, val, sub]) => `<div class="tile"><div class="l">${l}</div><div class="v">${val}</div>${sub ? `<div class="tiny">${sub}</div>` : ""}</div>`).join("");
+  $("notice").innerHTML = `수수료 ${(o.fee * 100).toFixed(0)}%에서는 산 값보다 <b>${((1 / (1 - o.fee) - 1) * 100).toFixed(0)}% 이상</b> 비싸게 팔아야 본전입니다. 반복되는 주말 프리미엄은 대부분 +3~8%라, 수익은 주로 평일 평균보다 크게 싸게 살 때 나옵니다. 매수 전 게임에서 실제 매물 가격을 꼭 확인하세요.`;
+
+  const a = o.allocation;
+  $("allocSummary").innerHTML = `<b>랭커 픽 추천 점수 순</b>으로 배분합니다. 매수가 = 현재가, 예상 매도가 = 지난 주말 평균. 수수료 ${(o.fee * 100).toFixed(0)}%로 목표 수익률 ${(o.min_target_roi * 100).toFixed(0)}%를 넘으면 쿠폰 없이, 아니면 ${a.coupon ? pc(a.coupon) + " 쿠폰" : "쿠폰"}을 쓰면 넘는 카드만 쿠폰 매수 (1장 판매에 1장). ` +
+    `카드당 한도 ${bp(a.cap_per_card)} (총 운용 BP × ${(o.max_per_card * 100).toFixed(0)}%) · 수량은 2시간 거래 5건당 1장${o.max_qty_per_card ? ` · 최대 ${o.max_qty_per_card}장` : ""} · ` +
+    `순 BP ${bp(a.cash_bp)} 중 배분 ${bp(a.invested)} · <b>잔여 순 BP ${bp(a.remaining)}</b> · 쿠폰 ${a.coupons_used}장 사용 예정, ${a.coupons_left}장 남음`;
+  $("allocTable").innerHTML = `<thead><tr><th class="l">카드</th><th>점수</th><th>수량</th><th>1장 매수가</th><th>총 매수 비용</th><th>예상 매도가<br><span class="tiny">지난 주말</span></th><th>수수료</th><th>예상 순수익</th><th>비중</th><th>잔여 BP</th><th class="l">비고</th></tr></thead><tbody>` +
+    (a.rows.length ? a.rows.map((r) => `<tr data-s="${r.key[0]}" data-g="${r.key[1]}"><td class="l">${cardCell(r.key[0], r.name, r.cls, r.grade)}</td><td>${r.score?.toFixed(1) ?? "-"}</td><td><b>${r.qty}장</b></td><td>${bp(r.unit_price)}${r.lower ? `<div class="tiny">하한 ${bp(r.lower)}</div>` : ""}</td><td>${bp(r.total_cost)}</td><td>${bp(r.sell_expected)}</td>
+      <td>${r.coupon ? `<span class="badge b-buy">${pc(a.coupon)} 쿠폰</span>` : (o.fee * 100).toFixed(0) + "%"}</td><td class="${cls(r.net_total)}">${bp(r.net_total)}<div class="tiny">1장 ${bp(r.unit_net)}</div></td><td>${(r.weight * 100).toFixed(1)}%</td><td>${bp(r.remaining_after)}</td><td class="l small muted">${esc(r.note)}</td></tr>`).join("")
+      : `<tr><td class="l" colspan="11">배분할 카드 없음</td></tr>`) + "</tbody>";
+  $("allocSkipped").innerHTML = a.skipped.length ? `<thead><tr><th class="l">카드</th><th>점수</th><th>현재가</th><th>지난 주말</th><th class="l">이유</th></tr></thead><tbody>` +
+    a.skipped.map((r) => `<tr data-s="${r.key[0]}" data-g="${r.key[1]}"><td class="l">${cardCell(r.key[0], r.name, r.cls, r.grade)}</td><td>${r.score?.toFixed(1) ?? "-"}</td><td>${bp(r.unit_price)}</td><td>${bp(r.sell_expected)}</td><td class="l">${esc(r.reason)}</td></tr>`).join("") + "</tbody>" : "<tr><td class='l'>없음</td></tr>";
+}
+
+/* ---------- 페이지 탭 ---------- */
+function showPage(p) {
+  document.querySelectorAll(".page").forEach((d) => d.hidden = d.dataset.page !== p);
+  document.querySelectorAll("#pageTabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.p === p));
+  try { localStorage.setItem("fco.page", p); } catch (e) {}
+}
+document.querySelectorAll("#pageTabs button").forEach((b) => b.onclick = () => showPage(b.dataset.p));
+showPage((() => { try { return localStorage.getItem("fco.page") || "1"; } catch (e) { return "1"; } })());
+
+/* ---------- 선수 검색 (DB) ---------- */
+let searchTimer = null;
+$("cardSearch").oninput = () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(async () => {
+    const q = $("cardSearch").value.trim();
+    if (!q) { $("cardSearchTable").innerHTML = ""; return; }
+    try {
+      const rows = await api(`/api/cardsearch?q=${encodeURIComponent(q)}`);
+      $("cardSearchMsg").textContent = rows.length ? `${rows.length}장${rows.length >= 80 ? " (앞 80장만 — 시즌을 함께 쓰면 좁혀집니다)" : ""} · 누르면 선수 창` : "찾은 카드 없음";
+      $("cardSearchTable").innerHTML = rows.length ? `<thead><tr><th class="l">카드</th><th>현재가</th><th>2시간 거래</th><th class="l">가격 받은 시각</th></tr></thead><tbody>` +
+        rows.map((r) => `<tr data-s="${r.spid}" data-g="${r.grade}"><td class="l">${cardCell(r.spid, r.player_name, r.class_name, r.grade)}</td><td>${bp(r.mk_price || r.current_price)}</td><td>${r.transfers_2h == null ? "-" : r.transfers_2h + "건"}</td><td class="l tiny">${esc((r.fetched_at || "").replace("T", " ").slice(5, 16))}</td></tr>`).join("") + "</tbody>" : "";
+    } catch (e) { $("cardSearchMsg").textContent = "검색 실패: " + e.message; }
+  }, 250);
+};
+
+/* ---------- settings ---------- */
+const FIELDS = [
+  ["cashBp", "보유한 순 BP (매물 제외)", "bp", 1], ["baseRate", "기본 판매 수수료 (%)", "number", 100],
+  ["premiumPcBang", "프리미엄 PC방 할인 적용", "bool"], ["pcBangDiscount", "프리미엄 PC방 할인 (%)", "number", 100],
+  ["topClass", "TOP CLASS 할인 적용", "bool"], ["topClassDiscount", "TOP CLASS 할인 (%)", "number", 100],
+  ["activePreset", "분석 가격대", "select"], ["maxPerCardRatio", "카드당 최대 투자 비중 (%)", "number", 100],
+  ["maxQtyPerCard", "카드당 최대 수량 (0 = 제한 없음)", "number", 1],
+  ["minTargetRoi", "최소 목표 수익률 (%)", "number", 100], ["discountFactorMin", "매수 할인 계수 최소", "number", 1],
+  ["discountFactorMax", "매수 할인 계수 최대", "number", 1],
+];
+function renderSettings(s) {
+  state.settings = s;
+  $("settingsForm").innerHTML = FIELDS.map(([k, label, type, mul]) => type === "select"
+    ? `<label>${label}<select data-k="${k}">${s.presets.map((p) => `<option ${p === s[k] ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></label>`
+    : type === "bp"
+    ? `<label>${label}<input data-k="${k}" data-bp="1" value="${esc(bpInput(s[k]))}" placeholder="예: 8.839억, 3500만"><span class="tiny">= ${bp(s[k])}</span></label>`
+    : type === "bool"
+    ? `<label style="display:flex;gap:8px;align-items:center">${label}<input data-k="${k}" data-bool="1" type="checkbox" style="width:auto" ${s[k] ? "checked" : ""}></label>`
+    : `<label>${label}<input data-k="${k}" data-m="${mul}" type="number" step="any" value="${+((s[k] ?? 0) * mul).toFixed(4)}"></label>`).join("");
+  $("settingsForm").insertAdjacentHTML("beforeend", `<div class="small muted" style="align-self:end">평소 판매 수수료 (쿠폰 없이): <b>${(s.sellFeeRate * 100).toFixed(1)}%</b><br><span class="tiny">= 기본 × (1 − 적용 할인 합), 할인은 더해서 적용</span></div>`);
+  $("presetSel").innerHTML = s.presets.map((p) => `<option ${p === s.activePreset ? "selected" : ""}>${esc(p)}</option>`).join("");
+}
+async function saveSettings(changes) {
+  $("saveMsg").textContent = "저장하고 다시 계산하는 중…";
+  try {
+    const r = await api("/api/settings", { method: "POST", headers: { "Content-Type": "application/json", "X-FCO-Request": "1" }, body: JSON.stringify(changes) });
+    renderSettings(r.settings);
+    $("saveMsg").textContent = "저장했습니다.";
+    await loadAll();
+  } catch (e) { $("saveMsg").textContent = "실패: " + e.message; }
+}
+$("saveBtn").onclick = () => {
+  const ch = {};
+  let bad = null;
+  $("settingsForm").querySelectorAll("[data-k]").forEach((el) => {
+    if (el.tagName === "SELECT") ch[el.dataset.k] = el.value;
+    else if (el.dataset.bool) ch[el.dataset.k] = el.checked;
+    else if (el.dataset.bp) { const v = parseBP(el.value); if (v == null) bad = el.value; else ch[el.dataset.k] = v; }
+    else ch[el.dataset.k] = (+el.value) / (+el.dataset.m);
+  });
+  if (bad != null) { $("saveMsg").textContent = `BP 값을 읽을 수 없습니다: ${bad}`; return; }
+  saveSettings(ch);
+};
+$("presetSel").onchange = (e) => saveSettings({ activePreset: e.target.value });
+
+/* ---------- detail ---------- */
+async function openDetail(spid, grade) {
+  const d = await api(`/api/card?spid=${spid}&grade=${grade}`);
+  state.detail = d;
+  const c = d.card;
+  $("dTitle").textContent = `${c.player_name ?? "(이름 없음)"} · ${season(c.class_name)} ${c.grade}강`;
+  $("dSub").innerHTML = `OVR ${c.ovr ?? "-"} · ${c.main_position ?? "-"} · ${verdictBadge(c.verdict)} · Deal Score <b>${c.deal_score?.toFixed(1) ?? "-"}</b> · 신뢰도 ${c.reliability}` +
+    (d.held.length ? ` · <b>보유 중</b> ${d.held.map((h) => `${h.qty}장 @ ${bp(h.buy_price)}`).join(", ")}` : "");
+  const kv = (pairs) => pairs.map(([k, v]) => `<div>${k}</div><div>${v}</div>`).join("");
+  $("dPrice").innerHTML = kv([
+    ["현재가", `${bp(c.current_price)} <span class="tiny">${(c.current_at || "").replace("T", " ").slice(5, 16)}</span>`],
+    ["어제 일별 가격 대비", `<span class="${cls(c.current_vs_last_daily_pct)}">${pct(c.current_vs_last_daily_pct)}</span>`],
+    ["평일 평균 / 중앙값", `${bp(c.wd_mean)} / ${bp(c.wd_median)}`],
+    ["매수 적정가", `${bp(c.buy_fair)} <span class="tiny">(× ${c.factor?.toFixed(3)})</span>`],
+    ["목표 수익률 최대 매수가", bp(c.max_buy_for_target)],
+    ["<b>목표 매수가</b>", `<b>${bp(c.target_buy)}</b> <span class="tiny">평일 평균 대비 −${c.required_discount_pct?.toFixed(1)}%</span>`],
+    ["예상 매도가", `${bp(c.sell_expected)} <span class="tiny">(주말 +${c.premium_used_pct?.toFixed(1)}%)</span>`],
+    ["매도 수수료", bp(c.fee_amount)],
+    ["현재가 매수 시 순수익 / ROI", `<span class="${cls(c.net_at_current)}">${bp(c.net_at_current)} / ${pct(c.roi_at_current_pct)}</span>`],
+    ["목표가 매수 시 순수익 / ROI", `<span class="${cls(c.net_at_target)}">${bp(c.net_at_target)} / ${pct(c.roi_at_target_pct)}</span>`],
+    ["손익분기 매도가 (현재가 매수)", bp(c.break_even_sell_at_current)],
+    ["목표가 도달 (최근 일별)", `${c.reach_days ?? 0} / ${c.reach_lookback}일`],
+  ]) + (d.market ? kv([
+    ["<b>하한가 / 상한가</b> (fionhub)", `${bp(d.market.lower_limit)} / <b>${bp(d.market.upper_limit)}</b> <span class="tiny">현재가 ${bp(d.market.price)} · ${(d.market.fetched_at || "").replace("T", " ").slice(5, 16)}</span>`],
+    ["상한가 구매 대기 / 2시간 거래", `${d.market.buy_at_upper}건 / ${d.market.transfers_2h ?? "-"}건`],
+    ["구매 대기 호가", d.market.buy_levels.map(([p, n]) => `${bp(p)}×${n}`).join(", ") || "-"],
+    ["판매 대기 호가", d.market.sell_levels.map(([p, n]) => `${bp(p)}×${n}`).join(", ") || "-"],
+    ["하한가 매수 → 같은 시세 상한가 매도", `<span class="${cls(d.market.flip_roi_pct)}">${pct(d.market.flip_roi_pct)}</span>` +
+      (d.market.flip_roi_coupon_pct != null ? ` · ${pc(d.market.coupon)} 쿠폰 쓰면 <span class="${cls(d.market.flip_roi_coupon_pct)}">${pct(d.market.flip_roi_coupon_pct)}</span>` : "")],
+  ]) : `<div>하한가 / 상한가</div><div class="tiny">아직 받지 않음 (갱신 때 보유 매물 + 추천 상위 카드만 받음)</div>`);
+  const P = d.parts, names = { popularity: "인기 스쿼드", discount: "할인율", weekend: "주말 프리미엄", stability: "가격 안정성" };
+  const raw = { popularity: (v) => v.toFixed(1) + "점", discount: (v) => pct(v), weekend: (v) => pct(v), stability: (v) => "CV " + (-v).toFixed(3) };
+  $("dScore").innerHTML = `<table class="small"><thead><tr><th class="l">지표</th><th>원값</th><th>그룹 내 위치</th><th>배점</th><th>점수</th></tr></thead><tbody>` +
+    Object.keys(names).map((k) => { const p = P[k]; return p.points == null
+      ? `<tr><td class="l">${names[k]}</td><td colspan="3" class="muted">데이터 부족 → 제외하고 재환산</td><td>-</td></tr>`
+      : `<tr><td class="l">${names[k]}</td><td>${raw[k](p.raw)}</td><td><div class="bar" title="${(p.percentile * 100).toFixed(0)}%"><i style="width:${(p.percentile * 100).toFixed(0)}%"></i></div></td><td>${p.weight}</td><td>${p.points.toFixed(1)}</td></tr>`; }).join("") +
+    `<tr><td class="l">기본 점수</td><td colspan="3"></td><td>${c.base_score?.toFixed(1)}</td></tr><tr><td class="l">위험 감점</td><td colspan="3" class="l small">${(c.risk_flags || "").split(",").filter(Boolean).map((f) => FLAG[f]).join(", ") || "없음"}</td><td>−${c.penalty?.toFixed(0)}</td></tr><tr><td class="l"><b>Deal Score</b></td><td colspan="3" class="tiny">그룹 ${esc(c.price_group)} · 신뢰도 ${c.reliability_pct}%</td><td><b>${c.deal_score?.toFixed(1)}</b></td></tr></tbody></table>` +
+    `<div class="warn-list" style="margin-top:8px">${(c.warnings || "").split(",").filter(Boolean).map((w) => `<span class="w">${esc(w)}</span>`).join("")}</div>`;
+  $("dStats").innerHTML = kv([
+    ["분석 기간", `${c.window_start} ~ ${c.window_end}`],
+    ["주말 평균 / 중앙값", `${bp(c.we_mean)} / ${bp(c.we_median)}`],
+    ["주말 프리미엄 (공식)", pct(c.premium_pct)],
+    ["주말 상승 주 (추세 보정)", `${c.weeks_positive} / ${c.weeks_total}주 · 중앙 ${pct(c.weekly_premium_median_pct)}${c.transient === 1 ? " · 일시적" : ""}`],
+    ["할인율 (평일 평균 대비)", pct(c.discount_pct)],
+    ["CV 7일 / 30일", `${c.s_cv?.toFixed(3) ?? "-"} / ${c.l_cv?.toFixed(3) ?? "-"}`],
+    ["30일 변동 / 추세", `${pct(c.l_change_pct)} / ${c.l_trend ?? "-"} (${pct(c.l_trend_pct_per_day, 2)}/일)`],
+    ["7일 최대 하루 하락 / 상승", `${pct(c.max_daily_drop_pct)} / ${pct(c.max_daily_rise_pct)}`],
+    ["같은 값 연속 / 30일 기록률", `${c.flat_run_days}일 / ${((c.l_coverage ?? 0) * 100).toFixed(0)}%`],
+    ["가격 기록 일수", `${c.price_days}일`],
+  ]);
+  $("dSquads").innerHTML = `인기 점수 <b>${c.pop_score.toFixed(1)}</b> / 210 · 1~200위 사용 ${c.users_top_universe}명 <span class="tiny">(랭킹 ${(c.snap_at || "").replace("T", " ").slice(0, 16)})</span>` +
+    (d.squads.length ? `<table class="small" style="margin-top:6px"><thead><tr><th>순위</th><th class="l">구단주</th><th class="l">구분</th><th>가중치</th></tr></thead><tbody>${d.squads.map((s) => `<tr><td>${s.rank}위</td><td class="l">${esc(s.nickname)}</td><td class="l">${s.is_sub ? "교체" : "선발"}</td><td>${((21 - s.rank) * (s.is_sub ? 0.5 : 1)).toFixed(1)}</td></tr>`).join("")}</tbody></table>`
+      : `<div class="muted" style="margin-top:6px">공식경기 1~20위 스쿼드에 없음</div>`);
+  const cur = d.current;
+  $("dCurTable").innerHTML = `<thead><tr><th class="l">갱신 시각</th><th>현재가</th><th>직전 갱신 대비</th><th>첫 기록 대비</th></tr></thead><tbody>` +
+    cur.map(([t, p], i) => [t, p, i ? (p - cur[i - 1][1]) / cur[i - 1][1] * 100 : null, i ? (p - cur[0][1]) / cur[0][1] * 100 : null]).reverse()
+      .map(([t, p, dp, d0]) => `<tr><td class="l">${esc(t.replace("T", " ").slice(0, 16))}</td><td>${bp(p)}</td><td class="${cls(dp)}">${dp == null ? "-" : pct(dp)}</td><td class="${cls(d0)}">${d0 == null ? "-" : pct(d0)}</td></tr>`).join("") +
+    `</tbody>`;
+  tableRowsCursorOff($("dCurTable"));
+  $("dTable").innerHTML = `<thead><tr><th class="l">날짜</th><th class="l">요일</th><th>일별 가격</th></tr></thead><tbody>` +
+    [...d.daily].reverse().map(([day, p]) => `<tr><td class="l">${day}</td><td class="l">${"일월화수목금토"[new Date(day + "T00:00:00").getDay()]}</td><td>${bp(p)}</td></tr>`).join("") + "</tbody>";
+  $("rangeTabs").innerHTML = [30, 90, 365].map((n) => `<button aria-selected="${n === state.range}" data-n="${n}">${n}일</button>`).join("");
+  $("rangeTabs").querySelectorAll("button").forEach((b) => b.onclick = () => { state.range = +b.dataset.n; $("rangeTabs").querySelectorAll("button").forEach((x) => x.setAttribute("aria-selected", x === b)); drawChart(); });
+  if (!$("dlg").open) $("dlg").showModal();
+  drawChart();
+}
+$("dClose").onclick = () => $("dlg").close();
+
+function drawChart() {
+  const d = state.detail, c = d.card;
+  drawPriceChart($("chart"), $("tip"), d.daily, d.current, state.range,
+    [["평일 평균", c.wd_mean], ["매수 적정가", c.buy_fair], ["목표 매수가", c.target_buy], ["예상 매도가", c.sell_expected]],
+    `${c.player_name} ${c.grade}강`);
+}
+
+/* 일별 가격 선 + 현재가 관측 점 + 기준선(점선). daily = [[day, price]], current = [[iso, price]], refs = [[이름, 값]] */
+function drawPriceChart(svg, tip, daily, current, range, refsIn, label) {
+  const css = getComputedStyle(document.documentElement), col = (n) => css.getPropertyValue(n).trim();
+  const pts = daily.slice(-range).map(([day, p]) => ({ t: new Date(day + "T00:00:00"), p }));
+  if (!pts.length) { svg.innerHTML = `<text x="20" y="40" fill="${col("--text-2")}">가격 기록 없음</text>`; return; }
+  const cur = current.map(([t, p]) => ({ t: new Date(t), p })).filter((x) => x.t >= pts[0].t);
+  const W = 760, H = 300, m = { l: 62, r: 118, t: 14, b: 28 };
+  const refs = refsIn.filter(([, v]) => v != null);
+  const vals = pts.map((x) => x.p).concat(cur.map((x) => x.p), refs.map(([, v]) => v));
+  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.08 || hi * 0.05; lo = Math.max(0, lo - pad); hi += pad;
+  const t0 = pts[0].t.getTime(), t1 = Math.max(pts[pts.length - 1].t.getTime(), ...cur.map((x) => x.t.getTime())) + 864e5 * 0.5;
+  const X = (t) => m.l + (t - t0) / (t1 - t0 || 1) * (W - m.l - m.r), Y = (v) => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
+  let s = "";
+  for (const x of pts) { const dw = x.t.getDay(); if (dw === 6 || dw === 0) s += `<rect x="${X(x.t.getTime() - 432e5)}" y="${m.t}" width="${Math.max(1, X(x.t.getTime() + 432e5) - X(x.t.getTime() - 432e5))}" height="${H - m.t - m.b}" fill="${col("--band")}"/>`; }
+  for (let i = 0; i <= 4; i++) { const v = lo + (hi - lo) * i / 4, y = Y(v); s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y}" y2="${y}" stroke="${col("--grid")}"/><text x="${m.l - 6}" y="${y + 4}" text-anchor="end" font-size="11" fill="${col("--text-3")}">${bp(v)}</text>`; }
+  const ticks = 5; for (let i = 0; i <= ticks; i++) { const t = t0 + (pts[pts.length - 1].t.getTime() - t0) * i / ticks, dt = new Date(t); s += `<text x="${X(t)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="${col("--text-3")}">${dt.getMonth() + 1}/${dt.getDate()}</text>`; }
+  // reference lines with collision-avoiding direct labels
+  const labels = refs.map(([n, v]) => ({ n, v, y: Y(v) })).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < labels.length; i++) if (labels[i].y - labels[i - 1].y < 13) labels[i].y = labels[i - 1].y + 13;
+  for (const L of labels) { const y = Y(L.v); s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y}" y2="${y}" stroke="${col("--text-3")}" stroke-dasharray="4 4"/><text x="${W - m.r + 6}" y="${L.y + 4}" font-size="11" fill="${col("--text-2")}">${L.n} ${bp(L.v)}</text>`; }
+  s += `<path d="${pts.map((x, i) => (i ? "L" : "M") + X(x.t.getTime()).toFixed(1) + " " + Y(x.p).toFixed(1)).join("")}" fill="none" stroke="${col("--series-1")}" stroke-width="2" stroke-linejoin="round"/>`;
+  for (const x of cur) s += `<circle cx="${X(x.t.getTime())}" cy="${Y(x.p)}" r="4" fill="${col("--series-1")}" stroke="${col("--surface")}" stroke-width="2"/>`;
+  s += `<line id="xh" y1="${m.t}" y2="${H - m.b}" stroke="${col("--text-3")}" visibility="hidden"/><circle id="xd" r="4" fill="${col("--series-1")}" stroke="${col("--surface")}" stroke-width="2" visibility="hidden"/>`;
+  s += `<rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent" id="hit"/>`;
+  svg.innerHTML = s;
+  svg.setAttribute("aria-label", `${label} 최근 ${range}일 일별 가격`);
+  const hit = svg.querySelector("#hit"), xh = svg.querySelector("#xh"), xd = svg.querySelector("#xd");
+  hit.onmousemove = (e) => {
+    const r = svg.getBoundingClientRect(), sx = (e.clientX - r.left) / r.width * W;
+    let best = pts[0]; for (const x of pts) if (Math.abs(X(x.t.getTime()) - sx) < Math.abs(X(best.t.getTime()) - sx)) best = x;
+    const px = X(best.t.getTime()), py = Y(best.p);
+    xh.setAttribute("x1", px); xh.setAttribute("x2", px); xh.setAttribute("visibility", "visible");
+    xd.setAttribute("cx", px); xd.setAttribute("cy", py); xd.setAttribute("visibility", "visible");
+    const dw = "일월화수목금토"[best.t.getDay()];
+    tip.innerHTML = `${best.t.getFullYear()}-${String(best.t.getMonth() + 1).padStart(2, "0")}-${String(best.t.getDate()).padStart(2, "0")} (${dw})<br><b>${bp(best.p)}</b>`;
+    tip.style.display = "block";
+    const left = px / W * r.width, top = py / H * r.height;
+    tip.style.left = Math.min(r.width - tip.offsetWidth - 4, left + 10) + "px"; tip.style.top = Math.max(0, top - 44) + "px";
+  };
+  hit.onmouseleave = () => { tip.style.display = "none"; xh.setAttribute("visibility", "hidden"); xd.setAttribute("visibility", "hidden"); };
+}
+
+/* ---------- 공통 폼 대화상자 ---------- */
+const post = (path, body) => api(path, { method: "POST", headers: { "Content-Type": "application/json", "X-FCO-Request": "1" }, body: JSON.stringify(body) });
+function openForm(title, fieldsHtml, onSubmit, submitLabel = "저장") {
+  $("fTitle").textContent = title;
+  $("fForm").innerHTML = fieldsHtml + `<div style="display:flex;gap:8px;align-items:center"><button class="primary" value="ok">${submitLabel}</button><span class="small muted" id="fMsg"></span></div>`;
+  $("fForm").onsubmit = async (e) => {
+    e.preventDefault();
+    $("fMsg").textContent = "처리 중…";
+    try { await onSubmit(new FormData($("fForm"))); $("formDlg").close(); await loadAll(); }
+    catch (err) { $("fMsg").textContent = "실패: " + err.message; }
+  };
+  $("formDlg").showModal();
+}
+$("fClose").onclick = () => $("formDlg").close();
+const fld = (name, label, attrs = "") => `<label class="small muted" style="display:grid;gap:4px">${label}<input name="${name}" ${attrs}></label>`;
+const today = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+// 보유 순 BP 자동 반영 체크 (기본 켬). 예전 거래를 뒤늦게 적을 때처럼 이미 BP 에 반영된 경우만 끄면 됨.
+const cashChk = (what) => `<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="adjust_cash" checked> 보유 BP에 반영 — ${what} <span class="tiny">(지금 ${bp(state.pf?.cash)})</span></label>`;
+const adj = (f) => f.get("adjust_cash") === "on";
+const needBP = (v, name) => { const n = parseBP(v); if (n == null || n <= 0) throw new Error(`${name}을(를) 읽을 수 없습니다: ${v}`); return n; };
+
+/* ---------- 보유 매물 ---------- */
+$("mkBtn").onclick = async () => {
+  $("mkBtn").disabled = true; $("mkMsg").textContent = "fionhub 에서 받는 중…";
+  try {
+    const r = await post("/api/market/refresh", {});
+    $("mkMsg").textContent = `상한가 ${r.updated}장 갱신` + (r.failed.length ? ` · 실패 ${r.failed.length}: ${r.failed.join(" / ")}` : "");
+    await loadAll();
+  } catch (e) { $("mkMsg").textContent = "실패: " + e.message; }
+  finally { $("mkBtn").disabled = false; }
+};
+$("addHoldBtn").onclick = () => {
+  openForm("보유 매물 추가",
+    `<label class="small muted" style="display:grid;gap:4px">선수 검색 (이름 일부)<input id="pSearch" autocomplete="off" placeholder="예: 쿠르투아"></label>
+     <label class="small muted" style="display:grid;gap:4px">시즌 선택<select name="spid" id="pPick" required><option value="">먼저 검색하세요</option></select></label>
+     <div class="grid2" style="gap:10px">
+       ${fld("grade", "강화 단계 (1~13)", 'type="number" min="1" max="13" required')}
+       ${fld("qty", "수량 (장)", 'type="number" min="1" value="1" required')}
+       ${fld("buy_price", "1장당 매수가 (예: 1.5억, 3500만)", "required")}
+       ${fld("bought_at", "매수일", `type="date" value="${today()}"`)}
+     </div>
+     ${fld("memo", "메모 (선택)", 'maxlength="200"')}
+     ${cashChk("수량 × 매수가 만큼 뺌")}
+     <div class="tiny">처음 보는 카드면 데이터센터에서 시세를 바로 받아 옵니다 (몇 초). 이미 BP 에서 빠진 예전 구매를 적는 거라면 체크를 끄세요.</div>`,
+    async (f) => {
+      if (!f.get("spid")) throw new Error("시즌을 선택하세요");
+      await post("/api/holding", { spid: +f.get("spid"), grade: +f.get("grade"), qty: +f.get("qty"),
+        buy_price: needBP(f.get("buy_price"), "매수가"), bought_at: f.get("bought_at"), memo: f.get("memo"), adjust_cash: adj(f) });
+    }, "추가");
+  let timer;
+  $("pSearch").oninput = (e) => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const rs = await api("/api/search?q=" + encodeURIComponent(e.target.value));
+      $("pPick").innerHTML = rs.length ? rs.map((r) => `<option value="${r.spid}">${esc(r.name)} · ${esc(season(r.class_name) || "시즌 미상")}${r.known_grades ? " (분석 중: " + esc(r.known_grades) + "강)" : ""}</option>`).join("")
+        : `<option value="">검색 결과 없음</option>`;
+    }, 250);
+  };
+};
+
+function lotForm(l, mode) {
+  const name = `${l.player_name ?? "(이름 없음)"} ${season(l.class_name)} ${l.grade}강`;
+  if (mode === "sell") {
+    const cps = (state.cp?.inventory || []).filter((c) => !c.expired);
+    const cpOpts = `<option value="">쿠폰 안 씀 (수수료 ${(state.pf.fee * 100).toFixed(1)}%)</option>` +
+      cps.map((c) => `<option value="id:${c.id}">${pc(c.discount)} 쿠폰 · 보유 ${c.qty}장 → 수수료 ${(c.fee_with * 100).toFixed(1)}% (사용 시 장수 차감)</option>`).join("") +
+      [30, 40, 50, 100].map((d) => `<option value="pct:${d}">${d}% 쿠폰 (목록에 없는 쿠폰을 이미 씀 — 장수 차감 안 함)</option>`).join("");
+    openForm(`매도 기록 — ${name}`,
+      `${fld("qty", `매도 수량 (보유 ${l.qty}장)`, `type="number" min="1" max="${l.qty}" value="${l.qty}" required`)}
+       ${fld("sell_price", "1장당 매도가 (게임에 올린 판매가, 수수료 빼기 전)", `value="${esc(bpInput(l.current_price))}" required`)}
+       <label class="small muted" style="display:grid;gap:4px">수수료 쿠폰 (1장 판매에 1장)<select name="coupon">${cpOpts}</select></label>
+       ${fld("sold_at", "매도일", `type="date" value="${today()}"`)}
+       ${fld("memo", "메모 (선택)", 'maxlength="200"')}
+       ${cashChk("받은 BP(수수료 뺀 판매 대금)를 더함")}
+       <div class="tiny">실현 손익 = 수량 × (매도가 × (1 − 수수료) − 매수가 ${bp(l.buy_price)}). 쿠폰을 고르면 그 쿠폰을 적용한 수수료로 계산합니다.</div>`,
+      (f) => {
+        const c = f.get("coupon") || "";
+        return post("/api/holding/sell", { id: l.id, qty: +f.get("qty"), sell_price: needBP(f.get("sell_price"), "매도가"), sold_at: f.get("sold_at"), memo: f.get("memo"),
+          coupon_id: c.startsWith("id:") ? +c.slice(3) : null, coupon_discount: c.startsWith("pct:") ? +c.slice(4) : null, adjust_cash: adj(f) });
+      }, "매도 기록");
+  } else if (mode === "edit") {
+    openForm(`수정 — ${name}`,
+      `${fld("qty", "수량 (장)", `type="number" min="1" value="${l.qty}" required`)}
+       ${fld("buy_price", "1장당 매수가", `value="${esc(bpInput(l.buy_price))}" required`)}
+       ${fld("bought_at", "매수일", `type="date" value="${esc(l.bought_at)}"`)}
+       ${fld("memo", "메모", `maxlength="200" value="${esc(l.memo || "")}"`)}
+       ${cashChk("매수 금액(수량 × 매수가)이 바뀐 만큼 조정")}`,
+      (f) => post("/api/holding/update", { id: l.id, qty: +f.get("qty"), buy_price: needBP(f.get("buy_price"), "매수가"), bought_at: f.get("bought_at"), memo: f.get("memo"), adjust_cash: adj(f) }));
+  } else {
+    openForm(`삭제 — ${name}`, `<div class="small">이 보유 기록(${l.qty}장, 매수가 ${bp(l.buy_price)})을 지웁니다. 판매한 것이면 삭제 대신 '매도'로 기록하세요.</div>
+      ${cashChk(`잘못 넣은 기록이면 매수 금액 ${bp(l.qty * l.buy_price)}을 되돌림`)}`,
+      (f) => post("/api/holding/delete", { id: l.id, adjust_cash: adj(f) }), "삭제");
+  }
+}
+
+function renderPortfolio(pf) {
+  state.pf = pf;
+  const t = pf.totals;
+  $("pfTiles").innerHTML = [
+    ["보유한 순 BP", bp(pf.cash), "매수·매도 기록 시 자동 반영 · 설정에서 직접 변경"],
+    ["보유 매물 평가액", bp(t.market_value), `매수 원가 ${bp(t.cost)}${t.unpriced ? ` · 시세 없음 ${t.unpriced}건` : ""}`],
+    ["지금 팔면 받는 BP", bp(t.liquidation_value), `수수료 ${(pf.fee * 100).toFixed(0)}% 차감`],
+    ["평가 손익 (수수료 후)", `<span class="${cls(t.unrealized)}">${bp(t.unrealized)}</span>`, t.cost ? pct(t.unrealized / t.cost * 100) : ""],
+    ["총 운용 BP", bp(pf.total_bp), `수수료 차감 시 ${bp(pf.total_bp_after_fee)}`],
+    ["상한가로 팔면 손익", `<span class="${cls(t.profit_at_upper)}">${bp(t.profit_at_upper)}</span>`,
+      (pf.best_coupon ? `${pc(pf.best_coupon)} 쿠폰 쓰면 <b class="${cls(t.profit_at_upper_coupon)}">${bp(t.profit_at_upper_coupon)}</b>` : "쿠폰 없음") + (t.no_market ? ` · 상한가 없음 ${t.no_market}건` : "")],
+  ].map(([l, v, s]) => `<div class="tile"><div class="l">${l}</div><div class="v" style="font-size:18px">${v}</div><div class="tiny">${s}</div></div>`).join("");
+  const head = `<thead><tr><th class="l">카드</th><th>수량</th><th>매수가</th><th>현재가</th><th>직전 갱신 대비</th><th>하한가 / 상한가</th><th>손익분기 매도가</th><th>상한가 매도 손익</th><th>${pf.best_coupon ? pc(pf.best_coupon) + " 쿠폰 + 상한가" : "쿠폰 + 상한가"}</th><th>평가 손익 (현재가)</th><th>ROI</th><th>예상 매도가</th><th>예상 매도 시 손익</th><th class="l">판정</th><th class="l">매수일</th><th class="l"></th></tr></thead>`;
+  const mkCell = (l) => { const m = l.market; if (!m) return `<span class="tiny">상한가 없음</span>`;
+    return `${bp(m.lower_limit)} / <b>${bp(m.upper_limit)}</b><div class="tiny">상한가 구매 대기 ${m.buy_at_upper}건 · 2시간 거래 ${m.transfers_2h ?? "-"}건</div><div class="tiny">fionhub 현재가 ${bp(m.price)} · ${(m.fetched_at || "").replace("T", " ").slice(5, 16)}</div>`; };
+  const gapNote = (g) => g == null ? "" : `<div class="tiny">${g <= 0 ? "본전 넘음" : "본전까지 " + bp(g)}</div>`;
+  const rows = pf.lots.map((l, i) => `<tr data-i="${i}" data-s="${l.spid}" data-g="${l.grade}">
+    <td class="l">${cardCell(l.spid, l.player_name, l.class_name, l.grade)}${l.memo ? `<div class="tiny">${esc(l.memo)}</div>` : ""}</td>
+    <td>${l.qty}장</td><td>${bp(l.buy_price)}</td>
+    <td>${l.current_price ? bp(l.current_price) + `<div class="tiny">${(l.current_at || "").replace("T", " ").slice(5, 16)}</div>` : `<span class="tiny">${l.price_status === "no_data" ? "데이터센터 시세 없음" : "시세 없음"}</span>`}</td>
+    <td class="${cls(l.change_vs_prev_pct)}">${l.change_vs_prev_pct == null ? '<span class="tiny">기록 1회</span>' : pct(l.change_vs_prev_pct)}</td>
+    <td>${mkCell(l)}</td><td>${bp(l.break_even_sell)}</td>
+    <td class="${cls(l.profit_at_upper)}"><b>${bp(l.profit_at_upper)}</b>${gapNote(l.upper_gap_to_break_even)}</td>
+    <td class="${cls(l.profit_at_upper_coupon)}"><b>${bp(l.profit_at_upper_coupon)}</b>${gapNote(l.upper_gap_to_break_even_coupon)}</td>
+    <td class="${cls(l.unrealized)}">${bp(l.unrealized)}</td><td class="${cls(l.unrealized_roi_pct)}">${pct(l.unrealized_roi_pct)}</td>
+    <td>${bp(l.sell_expected)}</td><td class="${cls(l.profit_at_expected)}">${bp(l.profit_at_expected)}</td>
+    <td class="l">${l.verdict ? verdictBadge(l.verdict) : "-"}</td><td class="l small">${esc(l.bought_at)}</td>
+    <td class="l"><button data-act="sell" data-i="${i}">매도</button> <button data-act="edit" data-i="${i}">수정</button> <button data-act="del" data-i="${i}">삭제</button></td></tr>`).join("");
+  $("pfTable").innerHTML = head + `<tbody>${rows || `<tr><td class="l" colspan="15">등록된 보유 매물이 없습니다. '보유 매물 추가'로 입력하세요.</td></tr>`}</tbody>`;
+  $("pfTable").querySelectorAll("button[data-act]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); lotForm(pf.lots[+b.dataset.i], { sell: "sell", edit: "edit", del: "del" }[b.dataset.act]); });
+  const r = pf.realized;
+  $("tradeSummary").innerHTML = r.count ? `매도 ${r.count}건 · 수익 ${r.wins}건 · 실현 손익 <b class="${cls(r.net_profit)}">${bp(r.net_profit)}</b> (${pct(r.roi_pct)})` : "아직 매도 기록이 없습니다.";
+  $("tradeTable").innerHTML = pf.trades.length ? `<thead><tr><th class="l">매도일</th><th class="l">카드</th><th>수량</th><th>매수가</th><th>매도가</th><th class="l">쿠폰</th><th>수수료율</th><th>받은 BP</th><th>실현 손익</th><th class="l">메모</th><th class="l"></th></tr></thead><tbody>` +
+    pf.trades.map((t, i) => `<tr data-s="${t.spid}" data-g="${t.grade}"><td class="l">${esc(t.sold_at)}</td><td class="l">${cardCell(t.spid, t.player_name, t.class_name, t.grade)}</td><td>${t.qty}</td><td>${bp(t.buy_price)}</td><td>${bp(t.sell_price)}</td>
+      <td class="l">${t.coupon_discount ? pc(t.coupon_discount) : "-"}</td><td>${(t.fee_rate * 100).toFixed(1)}%</td><td>${bp(t.qty * t.sell_price * (1 - t.fee_rate))}</td><td class="${cls(t.net_profit)}">${bp(t.net_profit)}</td><td class="l">${esc(t.memo || "")}</td>
+      <td class="l"><button data-te="${i}">수정</button></td></tr>`).join("") + "</tbody>" : "";
+  $("tradeTable").querySelectorAll("button[data-te]").forEach((b) => b.onclick = () => {
+    const t = pf.trades[+b.dataset.te];
+    openForm(`매도 기록 수정 — ${t.player_name ?? ""} ${season(t.class_name)} ${t.grade}강`,
+      `${fld("sell_price", "1장당 매도가 (수수료 빼기 전)", `value="${esc(bpInput(t.sell_price))}" required`)}
+       ${fld("coupon_discount", "쓴 쿠폰 할인율 (%, 안 썼으면 0)", `type="number" min="0" max="100" step="5" value="${Math.round((t.coupon_discount || 0) * 100)}"`)}
+       ${fld("sold_at", "매도일", `type="date" value="${esc(t.sold_at)}"`)}
+       ${fld("memo", "메모", `maxlength="200" value="${esc(t.memo || "")}"`)}
+       ${cashChk("받은 BP가 바뀐 만큼 조정")}
+       <div class="tiny">수수료와 실현 손익을 다시 계산합니다. 보유 쿠폰 장수는 바뀌지 않습니다.</div>`,
+      (f) => post("/api/trade/update", { id: t.id, sell_price: needBP(f.get("sell_price"), "매도가"), coupon_discount: +f.get("coupon_discount"), sold_at: f.get("sold_at"), memo: f.get("memo"), adjust_cash: adj(f) }));
+  });
+}
+function tableRowsCursorOff(tbl) { tbl.querySelectorAll("tbody tr").forEach((tr) => tr.style.cursor = "default"); }
+
+/* ---------- 수수료 쿠폰 ---------- */
+const pc = (x) => (x * 100).toFixed(0) + "%";
+$("addCouponBtn").onclick = () => couponForm(null);
+function couponForm(c) {
+  openForm(c ? "쿠폰 수정" : "쿠폰 추가",
+    `<div class="grid2" style="gap:10px">
+       ${fld("discount", "할인율 (%, 5% 단위)", `type="number" min="5" max="100" step="5" value="${c ? Math.round(c.discount * 100) : 30}" required`)}
+       ${fld("qty", "장수", `type="number" min="1" value="${c ? c.qty : 1}" required`)}
+       ${fld("expires_at", "만료일 (선택)", `type="date" value="${c?.expires_at || ""}"`)}
+       ${fld("memo", "메모 (선택)", `maxlength="200" value="${esc(c?.memo || "")}"`)}
+     </div>
+     <div class="tiny">쿠폰 할인율은 기본 수수료를 깎는 비율이고 PC방·TOP CLASS 할인과 더해집니다.</div>`,
+    (f) => post(c ? "/api/coupon/update" : "/api/coupon", { id: c?.id, discount: +f.get("discount"), qty: +f.get("qty"), expires_at: f.get("expires_at"), memo: f.get("memo") }),
+    c ? "저장" : "추가");
+}
+function renderCoupons(a) {
+  state.cp = a;
+  const base = pc(a.base), now = (a.fee_now * 100).toFixed(1) + "%";
+  $("cpSummary").innerHTML = `평소 수수료 <b>${now}</b> = 기본 ${base} × (1 − 상시 할인 ${pc(a.standing_discount)}). 쿠폰은 남은 할인 여지 <b>${pc(a.room)}</b> 까지만 효과가 있습니다 (그 이상은 버려짐).<br>` +
+    `쿠폰 1장이 아끼는 BP = 판매가 × ${base} × 실효 할인 → <b>판매가가 클수록 많이 아낍니다</b>. 1억 판매에 30% 쿠폰이면 ${bp(1e8 * a.base * Math.min(0.3, a.room))} 절약.`;
+  $("cpTable").innerHTML = `<thead><tr><th class="l">할인율</th><th>장수</th><th>쓰면 수수료</th><th class="l">만료일</th><th class="l">메모</th><th class="l"></th></tr></thead><tbody>` +
+    (a.inventory.length ? a.inventory.map((c, i) => `<tr><td class="l"><b>${pc(c.discount)}</b>${c.wasted > 0 ? ` <span class="tiny">(실효 ${pc(c.discount - c.wasted)})</span>` : ""}</td><td>${c.qty}장</td><td>${(c.fee_with * 100).toFixed(1)}%</td>
+      <td class="l">${c.expires_at ? esc(c.expires_at) + (c.expired ? ' <span class="neg">만료</span>' : "") : "-"}</td><td class="l">${esc(c.memo || "")}</td>
+      <td class="l"><button data-cu="${i}">1장 사용</button> <button data-ce="${i}">수정</button> <button data-cd="${i}">삭제</button></td></tr>`).join("")
+      : `<tr><td class="l" colspan="6">등록된 쿠폰이 없습니다. '쿠폰 추가'로 입력하면 어디에 쓸지 계산합니다. 아래 매수 후보는 30/40/50% 쿠폰이 있다고 가정한 값입니다.</td></tr>`) + "</tbody>";
+  const q = (sel, fn) => $("cpTable").querySelectorAll(sel).forEach((b) => b.onclick = () => fn(a.inventory[+Object.values(b.dataset)[0]]));
+  q("button[data-cu]", async (c) => { await post("/api/coupon/use", { id: c.id, count: 1 }); loadAll(); });
+  q("button[data-ce]", (c) => couponForm(c));
+  q("button[data-cd]", (c) => openForm("쿠폰 삭제", `<div class="small">${pc(c.discount)} 쿠폰 ${c.qty}장을 목록에서 지웁니다.</div>`, () => post("/api/coupon/delete", { id: c.id }), "삭제"));
+  tableRowsCursorOff($("cpTable"));
+
+  const plan = a.overall_plan;
+  if (!plan) {
+    $("cpPlanDesc").textContent = "쿠폰을 등록하면 보유 매물 매도와 아래 매수 후보 중 어디에 어떤 쿠폰을 쓸지 배정합니다.";
+    $("cpPlan").innerHTML = "";
+  } else {
+    const hold = a.holdings_plan;
+    $("cpPlanDesc").innerHTML = `보유 매물 매도 + '쿠폰 쓰면 수익' 매수 후보를 모두 판매 1장 단위로 펼쳐, 비싼 판매부터 큰 쿠폰을 배정했습니다 (총 절약 <b>${bp(plan.total_saving)}</b>; 보유 매물에만 쓰면 ${bp(hold.total_saving)}).` +
+      (plan.unused.length ? ` 남는 쿠폰: ${plan.unused.map((u) => `${pc(u.discount)} ${u.count}장`).join(", ")}.` : "") +
+      ` 판매가는 보유 매물은 상한가(없으면 현재가), 신규 후보(랭커 픽 추천)는 지난 주말 평균 기준입니다.`;
+    const grouped = [];
+    for (const x of plan.assignments) {
+      const g = grouped.find((y) => y.key === x.key && y.coupon === x.coupon);
+      if (g) { g.n++; g.saving += x.saving; } else grouped.push({ ...x, n: 1 });
+    }
+    $("cpPlan").innerHTML = `<thead><tr><th class="l">우선</th><th class="l">어디에</th><th class="l">카드</th><th>판매가(1장)</th><th class="l">쿠폰</th><th>장수</th><th>수수료 (없이 → 쓰면)</th><th>절약 BP</th><th>매수가</th><th>쓰면 1장 순익</th></tr></thead><tbody>` +
+      grouped.map((x, i) => `<tr ${x.spid ? `data-s="${x.spid}" data-g="${x.grade}"` : ""}><td class="l">${i + 1}</td><td class="l">${x.kind}</td><td class="l">${cardCell(x.spid, x.name, x.cls, x.grade)}</td><td>${bp(x.unit_price)}</td>
+        <td class="l"><b>${pc(x.coupon)}</b>${x.wasted_discount > 0 ? ` <span class="tiny">(${pc(x.wasted_discount)} 버려짐)</span>` : ""}</td><td>${x.n}</td>
+        <td>${bp(x.fee_without)} → ${bp(x.fee_with)}</td><td class="pos">${bp(x.saving)}</td><td>${bp(x.buy_price)}</td>
+        <td class="${cls(x.unit_price - x.fee_with - x.buy_price)}">${bp(x.unit_price - x.fee_with - x.buy_price)}</td></tr>`).join("") + "</tbody>";
+  }
+  state.cpTier = Math.min(state.cpTier ?? 0, a.by_tier.length - 1);
+  $("cpTierTabs").innerHTML = a.by_tier.map((t, i) => `<button aria-selected="${i === state.cpTier}" data-i="${i}">${pc(t.discount)} 쿠폰${t.hypothetical ? " (가정)" : ""} · ${t.new_count}장</button>`).join("");
+  $("cpTierTabs").querySelectorAll("button").forEach((b) => b.onclick = () => { state.cpTier = +b.dataset.i; renderCoupons(state.cp); });
+  const t = a.by_tier[state.cpTier];
+  if (t) {
+    $("cpTierDesc").innerHTML = `${pc(t.discount)} 쿠폰을 매도 때 쓰면 수수료 ${(t.fee * 100).toFixed(1)}% (평소 ${(a.fee_now * 100).toFixed(1)}%). <b>랭커 픽 추천 카드</b> 중 1장 ${bp(a.budget_per_card)} 이하라 지금 살 수 있는 카드 (비싸서 제외 ${a.unaffordable}장)를 현재가로 사서 지난 주말 평균에 팔면 목표 수익률을 넘는 카드 ${t.count}장 — 그중 <b>쿠폰이 있어야만 되는 카드 ${t.new_count}장</b>. 랭커 픽 점수 순 10장.`;
+    $("cpTier").innerHTML = `<thead><tr><th class="l">카드</th><th>점수</th><th>현재가</th><th>예상 매도가<br><span class="tiny">지난 주말</span></th><th>쿠폰 쓰면 목표 매수가</th><th>쿠폰 쓰면 1장 순익 / ROI</th><th>쿠폰 없이 1장 순익</th><th class="l"></th></tr></thead><tbody>` +
+      (t.cards.length ? t.cards.map((x) => `<tr data-s="${x.spid}" data-g="${x.grade}"><td class="l">${cardCell(x.spid, x.player_name, x.class_name, x.grade)}</td><td>${x.deal_score?.toFixed(1) ?? "-"}</td><td>${bp(x.current_price)}</td><td>${bp(x.sell_expected)}</td><td>${bp(x.target_with)}</td>
+        <td class="${cls(x.profit_with)}">${bp(x.profit_with)} / ${pct(x.roi_with)}</td><td class="${cls(x.profit_without)}">${bp(x.profit_without)}</td><td class="l">${x.only_with_coupon ? '<span class="badge b-buy">쿠폰 있어야 수익</span>' : ""}</td></tr>`).join("")
+        : `<tr><td class="l" colspan="8">해당 카드 없음</td></tr>`) + "</tbody>";
+  }
+}
+
+/* ---------- 추천 검증 · 갱신 ---------- */
+function renderValidation(v) {
+  const line = (label, s) => s.evaluated
+    ? `${label}: 채점 ${s.evaluated}건 · 수수료 20% 기준 수익 ${s.wins}건, 평균 ROI <b class="${cls(s.avg_roi_pct)}">${pct(s.avg_roi_pct)}</b>` +
+      (s.avg_roi_coupon_pct != null ? ` · 쿠폰 썼다면 수익 ${s.wins_coupon}건, 평균 ROI <b class="${cls(s.avg_roi_coupon_pct)}">${pct(s.avg_roi_coupon_pct)}</b>` : "")
+    : null;
+  const parts = [line("전체 추천", v.all), line("점수 상위 10위", v.top10)].filter(Boolean);
+  $("valSummary").innerHTML = `랭커 픽 추천 기록 ${v.total}건 (${v.days}일치) · 채점 대기 ${v.pending}건${v.next_grade ? ` · 다음 채점: ${v.next_grade} 주말 가격이 나오면 (그다음 월요일)` : ""}<br>` +
+    (parts.length ? parts.join("<br>") : "아직 채점된 추천이 없습니다.") +
+    `<div class="tiny" style="margin-top:4px">채점 방법: 갱신할 때마다 그날 처음 추천된 카드를 그때 현재가로 기록 → 그 뒤 첫 주말(토·일) 넥슨 일별 가격 평균에 판 것으로 계산. ROI = 매도가 × (1 − 수수료) ÷ 매수가 − 1. '쿠폰' 은 추천 당시 가장 큰 쿠폰을 썼을 때. 채점 전 카드는 지금 시세로 본 중간 변화를 보여 줍니다. 일별 가격은 하루 평균이라 근사치입니다.</div>`;
+  const st = { pending: "채점 대기", evaluated: "채점", no_data: "가격 없음" };
+  $("valTable").innerHTML = v.recs.length ? `<thead><tr><th class="l">추천일</th><th>순위</th><th class="l">카드</th><th>점수</th><th>2시간 거래</th><th>추천 때 현재가</th><th>그때 지난 주말</th><th class="l">결과</th><th>매도 주말 평균</th><th>ROI<br><span class="tiny">수수료</span></th><th>ROI<br><span class="tiny">쿠폰</span></th></tr></thead><tbody>` +
+    v.recs.map((r) => `<tr data-s="${r.spid}" data-g="${r.grade}"><td class="l">${r.day}</td><td>${r.rank ?? "-"}</td><td class="l">${cardCell(r.spid, r.player_name, r.class_name, r.grade)}</td><td>${r.rp_score?.toFixed(1) ?? "-"}</td><td>${r.transfers_2h ?? "-"}건</td>
+      <td>${bp(r.current_price)}</td><td>${bp(r.weekend_avg)}</td>
+      <td class="l">${st[r.status]}${r.status === "pending" ? `<div class="tiny">${r.sell_weekend.slice(5)} 주말 매도 · 지금 <span class="${cls(r.now_change_pct)}">${pct(r.now_change_pct)}</span></div>` : ""}</td>
+      <td>${bp(r.exit_price)}</td><td class="${cls(r.roi_pct)}">${pct(r.roi_pct)}</td><td class="${cls(r.roi_coupon_pct)}">${pct(r.roi_coupon_pct)}</td></tr>`).join("") + "</tbody>"
+    : `<tr><td class="l">아직 기록이 없습니다. 다음 갱신부터 랭커 픽 추천이 기록됩니다.</td></tr>`;
+}
+function renderRefresh(r) {
+  $("refreshState").textContent = r.running ? "갱신 중… (끝나면 화면이 자동으로 새로고침됩니다)" : "";
+  $("refreshBtn").disabled = r.running; $("refreshMode").disabled = r.running;
+  const jobs = { refresh_quick: "빠른 갱신", refresh_daily: "일일 갱신", collect_squads: "랭커 스쿼드", collect_prices: "가격 수집" };
+  $("logTable").innerHTML = `<thead><tr><th class="l">시각</th><th class="l">작업</th><th class="l">결과</th><th class="l">내용</th></tr></thead><tbody>` +
+    r.logs.map((l) => `<tr><td class="l">${esc(l.at.replace("T", " ").slice(0, 16))}</td><td class="l">${jobs[l.job] || esc(l.job)}</td><td class="l">${l.ok ? "성공" : '<span class="neg">실패</span>'}</td><td class="l small" style="white-space:normal">${esc((l.message || "").split("\n")[0])}</td></tr>`).join("") + "</tbody>";
+  tableRowsCursorOff($("logTable"));
+  clearTimeout(state.refreshTimer);
+  if (r.running) state.refreshTimer = setTimeout(async () => { const n = await api("/api/refresh"); renderRefresh(n); if (!n.running) loadAll(); }, 10000);
+}
+$("refreshBtn").onclick = async () => {
+  const mode = $("refreshMode").value;
+  if (mode === "daily" && !confirm("전체 갱신은 40~50분 걸리고 Open API 를 약 400건 씁니다 (하루 한도 1,000건). 시작할까요?")) return;
+  try { const r = await post("/api/refresh", { mode }); renderRefresh(await api("/api/refresh")); $("refreshState").textContent = r.message; }
+  catch (e) { $("refreshState").textContent = "실패: " + e.message; }
+};
+
+/* ---------- 랭커 픽 추천 ---------- */
+// 팀컬러 배지: 팀 이름 · 팀 인기 순위 · 그 팀컬러 안에서 이 선수의 포지션 순위(픽률)
+// 팀 이름 → fc-info 그 팀 페이지, 포지션 순위 → fc-info 그 팀의 그 포지션
+const playerPick = (t) => !t.player_picks ? "" : t.player_picks.length
+  ? " · " + t.player_picks.map((p) => fcLink(t.label, p.position, `${esc(posName(p.position))} ${p.rank}위(${pc(p.pick_rate)})`)).join(", ")
+  : " · 선수 순위 15위 밖";
+const tcBadge = (t) => `<span class="badge ${t.popular_rank && t.popular_rank <= (state.rp?.config.topTeams ?? 20) ? "b-buy" : "b-wait"}" title="${esc(t.category)}">${t.popular_rank ? fcLink(t.label, null, esc(t.label)) + ` · 인기 ${t.popular_rank}위` : esc(t.label)}${playerPick(t)}</span>`;
+const tcBadges = (tcs) => {  // 표에는 인기 팀컬러 (topTeams 위 안) 만, 나머지는 개수
+  if (tcs == null) return `<span class="tiny">아직 모름 (fionhub 조회 전)</span>`;
+  const top = state.rp?.config.topTeams ?? 20;
+  const pop = tcs.filter((t) => t.popular_rank && t.popular_rank <= top).sort((a, b) => a.popular_rank - b.popular_rank);
+  const rest = tcs.length - pop.length;
+  return (pop.map(tcBadge).join(" ") || `<span class="tiny">인기 ${top}위 팀컬러 없음</span>`) + (rest ? ` <span class="tiny">외 ${rest}개</span>` : "");
+};
+function renderRankerPick(r) {
+  state.rp = r;
+  if (!r.snapshot) { $("rpDesc").textContent = "아직 fc-info 랭커 픽을 받지 않았습니다. 전체 갱신 때 받아 옵니다."; $("rpTable").innerHTML = ""; return; }
+  const c = r.config, ex = r.excluded, w = c.weights;
+  $("rpDesc").innerHTML = `fc-info 공식경기 팀컬러 <b>${c.topTeams}위</b> 안 팀의 포지션별 <b>${c.topRankPerPosition}위</b> 카드와 같은 시즌 · <b>${c.minGrade}강 이상</b> (랭커 ${c.minGradePicks}명 이상 쓴 강화) · ` +
+    `지난 주말(${r.weekend[0].slice(5)}~${r.weekend[1].slice(5)}) 평균보다 쌈 · 2시간 거래 <b>${c.minTransfers2h}건 이상</b> · 가격대 ${esc(r.preset)}<br>` +
+    `점수 = 거래량 ${w.transfers} + 픽률 ${w.pickRate} + 주말 대비 하락 ${w.weekendDrop} (후보 중 최고값 대비 비율, 거래량은 로그) · ` +
+    `<span class="tiny">랭커 픽 ${(r.snapshot.collected_at || "").replace("T", " ").slice(0, 16)} · 후보 ${r.candidates}장 → 추천 ${r.rows.length}장 · 제외: 가격 아직 없음 ${ex.no_price}, 가격대 밖 ${ex.out_of_range}, 주말보다 안 쌈 ${ex.not_cheaper}, 거래량 미확인 ${ex.no_market}, 거래량 부족 ${ex.low_volume}</span>`;
+  const best = (x) => { const a = x.appearances[0] && x.appearances.reduce((p, q) => (q.pick_rate > p.pick_rate ? q : p));
+    return a ? `${pc(a.pick_rate)}<div class="tiny">${fcLink(a.team, a.position, `${esc(a.team)} ${esc(posName(a.position))} ${a.rank}위`)}${x.appearances.length > 1 ? ` 외 ${x.appearances.length - 1}곳` : ""}</div>` : "-"; };
+  // 선수 이름 → fc-info 에서 가장 많이 쓰인 팀·포지션
+  const bestApp = (x) => x.appearances.length ? x.appearances.reduce((p, q) => (q.pick_rate > p.pick_rate ? q : p)) : null;
+  const playerCell = (x) => { const a = bestApp(x); const nm = esc(x.player_name ?? "");
+    return `<span class="cardcell">${face(x.spid)}<span>${a ? fcLink(a.team, a.position, nm) : nm}<div class="tiny">${esc(season(x.class_name))} ${x.grade}강</div></span></span>`; };
+  // 정렬: 선수·팀컬러 빼고 열 제목을 누르면 내림차순 → 오름차순
+  const sortCols = [["rp_score", "점수"], [null, "선수"], ["current_price", "현재가"], ["weekend_avg", "주말 평균"], ["drop_pct", "주말 대비"],
+    ["transfers_2h", "2시간<br>거래"], ["best_pick_rate", "최고 픽률"], ["upper", "하한가<br>상한가"], ["net_if_weekend", "주말에<br>팔면"], [null, "받는 팀컬러"]];
+  const sk = state.rpSort || ["rp_score", -1];
+  const head = `<thead><tr>${sortCols.map(([k, t], i) => k
+    ? `<th class="sortable${k === "best_pick_rate" ? " wrapc" : ""}" data-sk="${k}" title="눌러서 정렬">${t}${sk[0] === k ? (sk[1] < 0 ? " ▼" : " ▲") : ""}</th>`
+    : `<th class="l">${t}</th>`).join("")}</tr></thead>`;
+  // drop_pct 는 '얼마나 내렸나'(클수록 많이 내림) 그대로 정렬. 값 없는 카드는 항상 맨 아래.
+  const sorted = (list) => list.map((x, i) => [x, i]).sort(([a], [b]) => {
+    const x = a[sk[0]], y = b[sk[0]];
+    if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+    return (x - y) * sk[1];
+  });
+  const row = (x, i, list) => `<tr data-rp="${list}:${i}"><td>${x.rp_score != null ? `<b>${x.rp_score.toFixed(1)}</b>` : "-"}</td><td class="l">${playerCell(x)}</td>
+    <td>${bp(x.current_price)}<div class="tiny">${esc(x.price_source)}</div></td><td>${bp(x.weekend_avg)}</td><td class="neg">−${x.drop_pct.toFixed(1)}%</td><td><b>${x.transfers_2h}건</b></td><td class="wrapc">${best(x)}</td>
+    <td>${x.lower ? `${bp(x.lower)}<div>${bp(x.upper)}</div><div class="tiny">상한 대기 ${x.buy_at_upper}건</div>` : "-"}</td>
+    <td class="${cls(x.net_if_weekend)}">${bp(x.net_if_weekend)}<div class="tiny">${pct(x.roi_if_weekend_pct)} · 수수료 ${(r.fee * 100).toFixed(0)}%</div>${x.net_if_weekend_coupon != null ? `<div class="tiny">${pc(r.coupon)} 쿠폰: <span class="${cls(x.net_if_weekend_coupon)}">${bp(x.net_if_weekend_coupon)}</span></div>` : ""}</td>
+    <td class="l tc"><div class="warn-list">${tcBadges(x.team_colors && x.team_colors.filter((t) => t.category !== "강화"))}</div></td></tr>`;
+  $("rpTable").innerHTML = head + `<tbody>${sorted(r.rows).map(([x, i]) => row(x, i, "rows")).join("") || `<tr><td class="l" colspan="10">조건을 모두 만족하는 카드가 없습니다.</td></tr>`}</tbody>`;
+  $("rpNear").innerHTML = r.near.length ? head + `<tbody>${sorted(r.near).map(([x, i]) => row(x, i, "near")).join("")}</tbody>` : "<tr><td class='l'>없음</td></tr>";
+  document.querySelectorAll("#rpTable th[data-sk], #rpNear th[data-sk]").forEach((th) => th.onclick = () => {
+    const k = th.dataset.sk;
+    state.rpSort = sk[0] === k ? [k, -sk[1]] : [k, -1];  // 같은 열을 다시 누르면 방향 반대
+    renderRankerPick(state.rp);
+  });
+  document.querySelectorAll("tr[data-rp]").forEach((tr) => tr.onclick = (e) => {
+    if (e.target.closest("a")) return;  // fc-info 링크는 그대로 이동
+    const [l, i] = tr.dataset.rp.split(":"); const x = state.rp[l][+i];
+    openCard(x.spid, x.grade, { rp_score: x.rp_score, points_transfers: x.points_transfers, points_pick: x.points_pick, points_drop: x.points_drop }); });
+}
+/* 선수 창 (랭커 픽 추천 · 보유 매물 · 쿠폰 · 자금 배분 등 어디서 눌러도 같은 창) */
+function openRankerPick(x) {
+  const M = state.rpMeta || state.rp;
+  $("rpTitle").innerHTML = `<span class="cardcell">${face(x.spid, 51)}<span>${esc(x.player_name ?? "")}<div class="small muted">${esc(season(x.class_name))} ${x.grade}강${x.ovr ? ` · OVR ${x.ovr}` : ""}${x.main_position ? ` · ${esc(x.main_position)}` : ""}</div></span></span>`;
+  $("rpSub").innerHTML = (x.rp_score != null
+    ? `랭커 픽 점수 <b>${x.rp_score.toFixed(1)}</b> = 거래량 ${x.points_transfers.toFixed(1)} + 픽률 ${x.points_pick.toFixed(1)} + 주말 대비 하락 ${x.points_drop.toFixed(1)}`
+    : `랭커 픽 추천 목록 밖 카드`) +
+    (x.held?.length ? ` · <b>보유 중</b> ${x.held.map((h) => `${h.qty}장 @ ${bp(h.buy_price)}`).join(", ")}` : "");
+  const groups = {};
+  (x.team_colors || []).forEach((t) => (groups[t.category] = groups[t.category] || []).push(t));
+  const kv = (pairs) => `<div class="kv">${pairs.map(([k, v]) => `<div>${k}</div><div>${v}</div>`).join("")}</div>`;
+  const L = x.lt;  // 탭3 장기투자에서 열었을 때만
+  const ltHtml = !L ? "" :
+    `<h3 style="margin:0 0 6px">장기투자 · ${L.kind === "momentum" ? "상승 추세형 Momentum" : "저평가 선점형 Value"} Score <b>${L.score == null ? "-" : L.score.toFixed(1)}</b> ${gradeBadge(L.inv_grade)} <span class="badge ${LT_VD[L.verdict] || "b-wait"}">${esc(L.verdict)}</span></h3>` +
+    `<table class="small"><thead><tr><th class="l">항목</th><th>배점</th><th>비율</th><th>점수</th></tr></thead><tbody>` +
+    Object.entries(L.parts).map(([k, p]) => `<tr><td class="l">${LT_PART[k] || k}</td><td>${p.weight}</td><td>${p.f == null ? "데이터 없음 → 제외" : (p.f * 100).toFixed(0) + "%"}</td><td>${p.points == null ? "-" : p.points.toFixed(1)}</td></tr>`).join("") +
+    `</tbody></table><div class="small" style="margin-top:6px">매수 적정가 <b>${L.fair ? bp(L.fair) : esc(L.fair_note)}</b>${L.reasons.length ? ` · ${L.reasons.map(esc).join(" · ")}` : ""}${L.risks.length ? `<div class="neg">${L.risks.map(esc).join(" · ")}</div>` : ""}</div>` +
+    `<div class="tiny">데이터 없는 항목은 빼고 나머지 배점으로 100점 환산합니다.</div>`;
+  $("rpBody").innerHTML = ltHtml + (L ? `<h3 style="margin:14px 0 6px">받는 팀컬러</h3>` : `<h3 style="margin:0 0 6px">받는 팀컬러</h3>`) +
+    (x.team_colors == null ? `<div class="small muted">fionhub 에서 받지 못했습니다${x.fionhub_error ? ` (${esc(x.fionhub_error)})` : ""}.</div>`
+      : kv(Object.entries(groups).map(([k, ts]) => [esc(k), ts.map(tcBadge).join(" ")]))) +
+    `<div class="tiny" style="margin-top:4px">초록색 = fc-info 공식경기 인기 팀컬러 ${M?.config.topTeams ?? 20}위 안 · "ST 3위(12%)" = 그 팀컬러를 쓰는 랭커들이 이 시즌 카드를 그 포지션에서 고른 순위(픽률)</div>` +
+    `<h3 style="margin:14px 0 6px">랭커 픽 (fc-info, 이 시즌 카드가 나온 곳)</h3>` +
+    (x.appearances.length
+      ? `<table class="small"><thead><tr><th>팀컬러 순위</th><th class="l">팀컬러</th><th class="l">포지션</th><th>포지션 순위</th><th>픽률</th><th>이 강화 사용</th></tr></thead><tbody>` +
+        x.appearances.map((a) => `<tr><td>${a.team_rank}위</td><td class="l">${fcLink(a.team, null, esc(a.team))}</td><td class="l">${fcLink(a.team, a.position, esc(posName(a.position)))}</td><td>${a.rank}위</td><td>${pc(a.pick_rate)}</td><td>${a.grade_picks}명</td></tr>`).join("") + `</tbody></table>`
+      : `<div class="small muted">인기 팀컬러 ${M?.config.topTeams ?? 20}위 팀의 포지션별 15위 안에 없는 카드입니다.</div>`) +
+    `<h3 style="margin:14px 0 6px">가격</h3>` +
+    kv([["현재가", `${bp(x.current_price)} <span class="tiny">${esc(x.price_source)}${x.market_at ? " · " + x.market_at.replace("T", " ").slice(5, 16) : ""}</span>`],
+        ["지난 주말 평균", x.weekend_avg ? `${bp(x.weekend_avg)} <span class="tiny">(${x.weekend_days}일 · 넥슨 일별 가격)</span>` : "-"],
+        ["주말 대비", x.drop_pct == null ? "-" : `<span class="${cls(-x.drop_pct)}">${pct(-x.drop_pct)}</span>`],
+        ["하한가 / 상한가", x.lower ? `${bp(x.lower)} / ${bp(x.upper)} · 상한가 구매 대기 ${x.buy_at_upper}건` : `<span class="tiny">fionhub 시세 아직 없음</span>`],
+        ["2시간 거래", x.transfers_2h == null ? "-" : `${x.transfers_2h}건` +
+          (x.market_history?.length > 1 ? ` <span class="tiny">기록 ${x.market_history.slice(0, 12).map((h) => h.transfers_2h ?? "-").join(" ← ")}</span>` : "")],
+        ["지금 사서 주말 평균에 팔면", x.net_if_weekend == null ? "-" : `<span class="${cls(x.net_if_weekend)}">${bp(x.net_if_weekend)} (${pct(x.roi_if_weekend_pct)})</span> <span class="tiny">수수료 ${(M.fee * 100).toFixed(0)}%</span>`],
+        ...(x.net_if_weekend_coupon != null ? [[`${pc(M.coupon)} 쿠폰 쓰고 주말 평균에 팔면`, `<span class="${cls(x.net_if_weekend_coupon)}">${bp(x.net_if_weekend_coupon)}</span>`]] : [])]) +
+    `<div style="margin-top:10px"><button id="rpDetail">가격 분석 보기</button> <span class="tiny" id="rpDetailMsg"></span></div>`;
+  // 시세 그래프: 일별 가격 + 현재가 관측(데이터센터·fionhub) + 지난 주말 평균·하한가·상한가
+  state.rpRange = state.rpRange || 30;
+  const draw = (ph) => drawPriceChart($("rpChart"), $("rpTip"), ph.daily, ph.current, state.rpRange,
+    [["지난 주말 평균", x.weekend_avg], ["하한가", x.lower], ["상한가", x.upper], ...(x.lt?.fair ? [["장기 매수 적정가", x.lt.fair]] : [])], `${x.player_name} ${x.grade}강`);
+  $("rpChart").innerHTML = "";
+  api(`/api/prices?spid=${x.spid}&grade=${x.grade}`).then((ph) => {
+    $("rpRangeTabs").innerHTML = [30, 90, 365].map((n) => `<button aria-selected="${n === state.rpRange}" data-n="${n}">${n}일</button>`).join("");
+    $("rpRangeTabs").querySelectorAll("button").forEach((b) => b.onclick = () => { state.rpRange = +b.dataset.n;
+      $("rpRangeTabs").querySelectorAll("button").forEach((q) => q.setAttribute("aria-selected", q === b)); draw(ph); });
+    draw(ph);
+  }).catch((e) => { $("rpChart").innerHTML = `<text x="20" y="40">그래프를 불러오지 못함: ${esc(e.message)}</text>`; });
+  $("rpDetail").onclick = async () => { try { $("rpDlg").close(); await openDetail(x.spid, x.grade); } catch (e) { $("rpDlg").showModal(); $("rpDetailMsg").textContent = "이 카드는 아직 분석 전입니다 (다음 갱신 후)"; } };
+  $("rpDlg").showModal();
+}
+$("rpClose").onclick = () => $("rpDlg").close();
+
+/* ---------- 탭3 고가 선수 장기투자 ---------- */
+const LT_PART = { r7: "7일 상승률", r30: "30일 상승률", persist: "상승 추세 지속성", pop: "인기 순위", volume: "거래량 · 매물 소화",
+  risk: "급등 위험 관리", discount: "고점 대비 할인율", unpriced: "가격 상승 미반영", stability: "최근 가격 안정성", rebound: "반등 신호" };
+const LT_VD = { "매수 후보": "b-buy", "적정가 대기": "b-ins", "위험 — 매수 제한": "b-risk" };
+const gradeBadge = (g) => `<b style="display:inline-block;min-width:22px;text-align:center;border-radius:6px;padding:0 4px;background:var(--surface-2);color:${g === "S" || g === "A" ? "var(--good-text)" : g === "D" ? "var(--critical)" : "var(--text)"}">${g}</b>`;
+const popCell = (x) => x.pop_rank ? fcLink(x.pop_team, x.pop_pos, `${x.pop_rank}위`) + `<div class="tiny">${esc(x.pop_team)} ${esc(posName(x.pop_pos))}${x.pop_rank_prev && x.pop_rank_prev !== x.pop_rank ? ` · 전 ${x.pop_rank_prev}위` : ""}</div>` : `<span class="tiny">15위 밖</span>`;
+const ltExtra = (x) => ({ lt: { kind: x.kind, score: x.score, inv_grade: x.inv_grade, verdict: x.verdict, parts: x.parts, fair: x.fair, fair_note: x.fair_note, reasons: x.reasons, risks: x.risks } });
+function renderLongterm(r) {
+  state.lt = r;
+  const c = r.config;
+  $("ltDesc").innerHTML = `현재가 <b>${bp(r.min_price)} 이상</b> · 인기 순위 = fc-info 인기 팀컬러 20위 팀의 포지션 순위 중 가장 좋은 순위 (fc-info 가 포지션별 15위까지만 공개해 16위 이하는 '15위 밖') · ` +
+    `두 유형은 <b>점수·순위가 서로 독립</b> (같은 선수가 양쪽에 나올 수 있음) · 매수 후보 = 점수 ${c.buyScore} 이상 + 인기 ${c.popularRankMax}위 이내 + 위험 없음 + 현재가 ≤ 매수 적정가 × ${(1 + c.nearFairPct).toFixed(2)}<br>` +
+    `<span class="tiny">랭커 픽 ${(r.snapshot || "-").replace("T", " ").slice(0, 16)} · 인기 순위 변화 ${r.prev_snapshot ? `${r.prev_snapshot.replace("T", " ").slice(0, 16)} 대비` : "비교할 하루 전 기록이 아직 없음 (그 몫은 빼고 계산)"} · 거래량은 fionhub 에서 실제로 받은 카드만 반영 (없으면 그 항목을 빼고 100점 환산)</span>`;
+  $("ltHeld").innerHTML = r.held.length ? `<b class="small">보유 중인 10억 이상 카드 — 매도 검토</b><table class="small" style="margin-top:6px"><tbody>` +
+    r.held.map((h) => `<tr data-s="${h.spid}" data-g="${h.grade}"><td class="l">${cardCell(h.spid, h.player_name, h.class_name, h.grade)}</td><td>${bp(h.current_price)}</td><td class="${cls(h.r30)}">30일 ${pct(h.r30 == null ? null : h.r30 * 100)}</td>
+      <td class="l">${h.sell_signals.length ? h.sell_signals.map((s) => `<span class="badge b-risk">${esc(s)}</span>`).join(" ") : `<span class="badge b-buy">매수 근거 유지</span>`}</td></tr>`).join("") + `</tbody></table>`
+    : `<div class="tiny">보유 중인 10억 이상 카드가 없습니다 (있으면 여기서 매도 검토 신호: 30일 추세 꺾임 · 인기 순위 하락 · 매물 급증 · 단기 과열).</div>`;
+  $("ltMomDesc").innerHTML = `7일·30일이 모두 오른 카드. 점수 = 7일 상승률 ${c.momentumWeights.r7} + 30일 ${c.momentumWeights.r30} + 지속성 ${c.momentumWeights.persist} + 인기 ${c.momentumWeights.pop} + 거래량 ${c.momentumWeights.volume} + 급등 위험 ${c.momentumWeights.risk}. 매수 적정가 = 7일 평균을 현재가 −3~−5% 사이로 (과열이면 7일 평균까지 대기). ${r.momentum.length}장`;
+  $("ltValDesc").innerHTML = `고점 대비 10% 이상 싼 카드. 점수 = 인기 ${c.valueWeights.pop} + 고점 대비 할인 ${c.valueWeights.discount} + 상승 미반영 ${c.valueWeights.unpriced} + 안정성 ${c.valueWeights.stability} + 거래량 ${c.valueWeights.volume} + 반등 ${c.valueWeights.rebound}. 가격만 많이 빠진 비인기 카드는 높게 나오지 않음. 매수 적정가 = (14일 최저 + 14일 중앙값) ÷ 2. ${r.value.length}장`;
+  ltTable("mom", r.momentum, "ltMom", "ltMomFilter");
+  ltTable("val", r.value, "ltVal", "ltValFilter");
+  renderTradeTop(r);
+}
+// 거래 많은 순 TOP 15 (게임 '최다 조회수' 대신: fionhub 2시간 거래 건수, 최근 3시간 안에 받은 값)
+function renderTradeTop(r) {
+  state.ttK = state.ttK || "high";
+  const list = r.trade_top[state.ttK];
+  $("ttDesc").innerHTML = `게임 이적시장의 '최다 조회수'는 공개되지 않아, 대신 <b>최근 2시간 거래 완료 건수</b>(fionhub)로 순위를 매깁니다. 최근 3시간 안에 시세를 받은 카드만 들어갑니다 (갱신 때 받는 카드: 보유 · 추천 후보 · 장기투자 상위 · 인기 급등). 밤에는 거래가 거의 없어 숫자가 작습니다.`;
+  $("ttFilter").innerHTML = [["high", `${bp(r.min_price)} 이상`], ["all", "전체 가격대"]].map(([k, t]) => `<button aria-selected="${k === state.ttK}" data-k="${k}">${t}</button>`).join("");
+  $("ttFilter").querySelectorAll("button").forEach((b) => b.onclick = () => { state.ttK = b.dataset.k; renderTradeTop(r); });
+  $("ttTable").innerHTML = `<thead><tr><th>순위</th><th class="l">선수</th><th>현재가</th><th>2시간 거래</th><th>직전 대비</th><th>상한가 구매 대기</th><th>구매 / 판매 대기</th><th>하한가 / 상한가</th><th class="l">받은 시각</th></tr></thead><tbody>` +
+    (list.map((x, i) => `<tr data-s="${x.spid}" data-g="${x.grade}"><td>${i + 1}</td><td class="l">${cardCell(x.spid, x.player_name, x.class_name, x.grade)}</td><td>${bp(x.price)}</td>
+      <td><b>${x.transfers_2h}건</b></td><td class="${cls(x.transfers_prev == null ? null : x.transfers_2h - x.transfers_prev)}">${x.transfers_prev == null ? "-" : (x.transfers_2h - x.transfers_prev > 0 ? "+" : "") + (x.transfers_2h - x.transfers_prev)}</td>
+      <td>${x.buy_at_upper}건</td><td>${x.buy_total} / ${x.sell_total}</td><td>${x.lower ? `${bp(x.lower)} / ${bp(x.upper)}` : "-"}</td>
+      <td class="l tiny">${esc((x.fetched_at || "").replace("T", " ").slice(5, 16))}</td></tr>`).join("") || `<tr><td class="l" colspan="9">최근 3시간 안에 받은 거래 기록이 없습니다.</td></tr>`) + "</tbody>";
+}
+function ltTable(key, list, tblId, filtId) {
+  state.ltF = state.ltF || {}; state.ltS = state.ltS || {};
+  const f = state.ltF[key] || "all", sk = state.ltS[key] || ["score", -1];
+  const pass = { all: () => true, buy: (x) => x.verdict === "매수 후보", wait: (x) => x.verdict === "적정가 대기", top10: (x) => x.pop_rank && x.pop_rank <= 10, risk: (x) => x.risks.length > 0, exc: (x) => x.exception };
+  const names = [["all", "전체"], ["buy", "매수 후보"], ["wait", "적정가 대기"], ["top10", "인기 10위 이내"], ["risk", "위험 경고"], ["exc", "예외 후보 (순위권 밖)"]];
+  $(filtId).innerHTML = names.map(([k, t]) => `<button aria-selected="${k === f}" data-f="${k}">${t} <span class="tiny">${list.filter(pass[k]).length}</span></button>`).join("");
+  $(filtId).querySelectorAll("button").forEach((b) => b.onclick = () => { state.ltF[key] = b.dataset.f; ltTable(key, list, tblId, filtId); });
+  const cols = [["rank", "순위"], [null, "선수"], ["current_price", "현재가"], ["score", "점수"], ["inv_grade", "등급"], ["r7", "7일"], ["r30", "30일"],
+    ["pop_rank", "인기 순위"], ["disc", "고점 대비"], ["fair", "매수 적정가"], [null, "판단"], [null, "추천 이유 · 위험 경고"]];
+  const val = (x, k) => k === "inv_grade" ? "SABCD-".indexOf(x.inv_grade) * -1 : x[k];
+  const rows = list.filter(pass[f]).sort((a, b) => { const p = val(a, sk[0]), q = val(b, sk[0]);
+    if (p == null && q == null) return 0; if (p == null) return 1; if (q == null) return -1; return (p - q) * sk[1]; });
+  $(tblId).innerHTML = `<thead><tr>${cols.map(([k, t]) => k ? `<th class="sortable" data-k="${k}">${t}${sk[0] === k ? (sk[1] < 0 ? " ▼" : " ▲") : ""}</th>` : `<th class="l">${t}</th>`).join("")}</tr></thead><tbody>` +
+    (rows.map((x) => `<tr data-lt="${key}:${list.indexOf(x)}">
+      <td>${x.rank}</td><td class="l">${cardCell(x.spid, x.player_name, x.class_name, x.grade)}${x.held ? ` <span class="badge b-buy">보유</span>` : ""}${x.exception ? `<div class="tiny">예외 후보</div>` : ""}</td>
+      <td>${bp(x.current_price)}</td><td><b>${x.score == null ? "-" : x.score.toFixed(1)}</b></td><td>${gradeBadge(x.inv_grade)}</td>
+      <td class="${cls(x.r7)}">${pct(x.r7 == null ? null : x.r7 * 100)}</td><td class="${cls(x.r30)}">${pct(x.r30 == null ? null : x.r30 * 100)}</td>
+      <td>${popCell(x)}</td><td>${x.disc == null ? "-" : "−" + (x.disc * 100).toFixed(1) + "%"}</td>
+      <td>${x.fair ? bp(x.fair) + (x.wait ? `<div class="tiny">과열 — 대기</div>` : "") : `<span class="tiny">${x.fair_note}</span>`}</td>
+      <td class="l"><span class="badge ${LT_VD[x.verdict] || "b-wait"}" style="white-space:nowrap">${esc(x.verdict)}</span></td>
+      <td class="l tc small">${x.reasons.map(esc).join(" · ")}${x.risks.length ? `<div class="neg">${x.risks.map(esc).join(" · ")}</div>` : ""}</td></tr>`).join("")
+      || `<tr><td class="l" colspan="12">해당 카드 없음</td></tr>`) + "</tbody>";
+  $(tblId).querySelectorAll("th[data-k]").forEach((th) => th.onclick = () => { const k = th.dataset.k; state.ltS[key] = sk[0] === k ? [k, -sk[1]] : [k, k === "rank" ? 1 : -1]; ltTable(key, list, tblId, filtId); });
+  $(tblId).querySelectorAll("tr[data-lt]").forEach((tr) => tr.onclick = (e) => { if (e.target.closest("a")) return;
+    const [, i] = tr.dataset.lt.split(":"); const x = list[+i]; openCard(x.spid, x.grade, ltExtra(x)); });
+}
+
+/* ---------- 카카오톡 알림 ---------- */
+function renderKakao(k) {
+  const local = ["127.0.0.1", "localhost"].includes(location.hostname);
+  const kbadge = k.connected ? `<span class="badge b-buy">연결됨</span>` : k.configured ? `<span class="badge b-ins">키 저장됨 · 연결 필요</span>` : `<span class="badge b-wait">설정 안 됨</span>`;
+  $("kakaoBox").innerHTML = `${kbadge} 외부 접속 주소가 새로 생길 때마다(PC 로그인 · 터널 재연결) 카카오톡 <b>나와의 채팅</b>으로 보냅니다.
+    <div style="display:grid;gap:8px;margin-top:10px;max-width:520px">
+      <label class="small muted" style="display:grid;gap:4px">REST API 키<input id="kkKey" type="password" autocomplete="off" placeholder="${k.configured ? "저장됨 (바꾸려면 새로 입력)" : "카카오 개발자 사이트 → 앱 키 → REST API 키"}"></label>
+      <label class="small muted" style="display:grid;gap:4px">클라이언트 시크릿 코드 (REST API 키 설정 화면 아래쪽, 새 키는 기본 ON)<input id="kkSecret" type="password" autocomplete="off" placeholder="${k.configured ? "저장됨 (바꾸려면 새로 입력)" : "클라이언트 시크릿 → 코드"}"></label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button id="kkSave">키 저장</button>
+        <button id="kkLogin" class="primary" ${k.configured ? "" : "disabled"}>카카오 연결</button>
+        <button id="kkTest" ${k.connected ? "" : "disabled"}>테스트 보내기</button>
+        <span class="small muted" id="kkMsg"></span>
+      </div>
+      <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="kkOnly" ${k.only_when_running ? "checked" : ""}>
+        PC 카카오톡이 실행 중일 때만 보내기 (지금 ${k.pc_kakao_running ? "실행 중" : "꺼져 있음"} · 로그인 직후엔 최대 5분 기다림)</label>
+    </div>
+    <div class="tiny" style="margin-top:6px">${k.last_sent_at ? `마지막 전송 ${esc(k.last_sent_at.replace("T", " "))}` : "아직 보낸 적 없음"}${k.refresh_expires_at ? ` · 연결 유지 ~${new Date(k.refresh_expires_at * 1000).toLocaleDateString()} (쓰는 동안 자동 연장)` : ""}${k.last_error ? `<br><span class="neg">최근 오류: ${esc(k.last_error)}</span>` : ""}
+    ${!local ? `<br>카카오 연결은 PC(이 컴퓨터) 브라우저에서 해야 합니다 (돌아오는 주소가 localhost).` : ""}</div>`;
+  const msg = (t) => $("kkMsg").textContent = t;
+  $("kkSave").onclick = async () => { try { const r = await post("/api/kakao/keys", { rest_api_key: $("kkKey").value, client_secret: $("kkSecret").value }); renderKakao(r.status); $("kkMsg").textContent = "저장했습니다"; } catch (e) { msg("실패: " + e.message); } };
+  $("kkLogin").onclick = () => { location.href = "/kakao/login"; };
+  $("kkTest").onclick = async () => { msg("보내는 중…"); try { const r = await post("/api/kakao/test", {}); renderKakao(r.status); $("kkMsg").textContent = "보냈습니다. 카카오톡 '나와의 채팅'을 확인하세요."; } catch (e) { msg("실패: " + e.message); } };
+  $("kkOnly").onchange = async (e) => { try { const r = await post("/api/kakao/option", { only_when_running: e.target.checked }); renderKakao(r.status); } catch (x) { msg("실패: " + x.message); } };
+}
+
+/* ---------- 인기 급등 선수 ---------- */
+const SIGNAL = { "인기↑ 가격 아직": "b-buy", "가격 오르는 중": "b-wait", "이미 가격 반영": "b-risk" };
+function renderRising(r) {
+  state.rise = r;
+  const cmp = r.compare ? `${r.compare[0].slice(5)} → ${r.compare[1].slice(5)}` : "";
+  $("riseDesc").innerHTML = `fc-info 인기 팀컬러 ${r.config.topTeams}위 팀 페이지의 <b>인기 급등 선수</b>(같은 팀컬러 랭커 중 이 카드를 쓴 수가 늘어난 선수)와 <b>새로운 선수</b>를 모아, ${r.config.minGrade}강 이상 · 가격대 ${esc(r.preset)} 카드만 보여 줍니다 (비교 기간 ${cmp}, 가격대 밖 ${r.out_of_range}장 제외).<br>` +
+    `<b>판단</b> (참고용): 7일 일별 가격 변화 ≤ +3% = <span class="badge b-buy">인기↑ 가격 아직</span> · +3~10% = <span class="badge b-wait">가격 오르는 중</span> · > +10% = <span class="badge b-risk">이미 가격 반영</span>. 2시간 거래는 갱신할 때마다 쌓아 추이를 보여 줍니다 (지금 ← 직전).`;
+  const filters = [["all", "전체"], ["인기↑ 가격 아직", "인기↑ 가격 아직"], ["가격 오르는 중", "가격 오르는 중"], ["이미 가격 반영", "이미 가격 반영"], ["vol", "2시간 거래 5건 이상"]];
+  state.riseF = state.riseF || "all";
+  const pass = (x) => state.riseF === "all" ? true : state.riseF === "vol" ? (x.transfers_2h ?? 0) >= 5 : x.signal === state.riseF;
+  $("riseFilter").innerHTML = filters.map(([k, t]) => `<button aria-selected="${k === state.riseF}" data-f="${k}">${t} <span class="tiny">${r.rows.filter((x) => k === "all" || (k === "vol" ? (x.transfers_2h ?? 0) >= 5 : x.signal === k)).length}</span></button>`).join("");
+  $("riseFilter").querySelectorAll("button").forEach((b) => b.onclick = () => { state.riseF = b.dataset.f; renderRising(state.rise); });
+  const cols = [[null, "선수"], [null, "급등한 곳 (팀컬러 · 포지션 · 사용 수)"], ["max_rate_change", "픽률 변화"], ["current_price", "현재가"], ["chg7_pct", "7일 가격"],
+    ["drop_pct", "지난 주말<br>대비"], ["transfers_2h", "2시간 거래"], ["upper", "하한가<br>상한가"], [null, "판단"]];
+  const sk = state.riseSort || ["max_rate_change", -1];
+  const val = (x, k) => k === "max_rate_change" ? (x.is_new && x.max_rate_change == null ? 1e6 : x.max_rate_change) : k === "drop_pct" ? (x.drop_pct == null ? null : -x.drop_pct) : x[k];
+  const rows = r.rows.filter(pass).sort((a, b) => { const p = val(a, sk[0]), q = val(b, sk[0]);
+    if (p == null && q == null) return 0; if (p == null) return 1; if (q == null) return -1; return (p - q) * sk[1]; });
+  const head = `<thead><tr>${cols.map(([k, t]) => k ? `<th class="sortable" data-rk="${k}">${t}${sk[0] === k ? (sk[1] < 0 ? " ▼" : " ▲") : ""}</th>` : `<th class="l">${t}</th>`).join("")}</tr></thead>`;
+  const where = (x) => x.rising.map((a) => `${fcLink(a.team, null, esc(a.team))} ${fcLink(a.team, a.position, esc(posName(a.position)))} ` +
+    (a.kind === "new" ? `<b>새로 등장</b> ${a.picks}명` : `${a.prev_picks}→<b>${a.picks}</b>명`)).join("<br>");
+  const vol = (x) => x.transfers_2h == null ? "-" : `<b>${x.transfers_2h}건</b>` + (x.transfers_prev != null
+    ? `<div class="tiny">직전 ${x.transfers_prev}건 <span class="${cls(x.transfers_2h - x.transfers_prev)}">${x.transfers_2h > x.transfers_prev ? "▲" : x.transfers_2h < x.transfers_prev ? "▼" : "–"}</span> · 기록 ${x.transfers_hist.length}회</div>` : `<div class="tiny">기록 1회</div>`);
+  $("riseTable").innerHTML = head + `<tbody>${rows.map((x) => `<tr data-s="${x.spid}" data-g="${x.grade}">
+    <td class="l">${cardCell(x.spid, x.player_name, x.class_name, x.grade)}</td>
+    <td class="l tc small" style="min-width:150px">${where(x)}</td>
+    <td>${x.max_rate_change != null ? `<b class="pos">+${Math.round(x.max_rate_change * 100).toLocaleString()}%</b>` : `<span class="badge b-buy">새로 등장</span>`}${x.rising_teams > 1 ? `<div class="tiny">${x.rising_teams}개 팀</div>` : ""}</td>
+    <td>${bp(x.current_price)}<div class="tiny">${esc(x.price_source)}</div></td>
+    <td class="${cls(x.chg7_pct)}">${pct(x.chg7_pct)}</td>
+    <td class="${cls(x.drop_pct == null ? null : -x.drop_pct)}">${x.drop_pct == null ? "-" : pct(-x.drop_pct)}</td>
+    <td>${vol(x)}</td>
+    <td>${x.lower ? `${bp(x.lower)}<div>${bp(x.upper)}</div>` : "-"}</td>
+    <td class="l wrapc">${x.signal ? `<span class="badge ${SIGNAL[x.signal]}" style="white-space:normal">${x.signal}</span>` : "-"}</td></tr>`).join("") || `<tr><td class="l" colspan="9">해당 카드 없음</td></tr>`}</tbody>`;
+  $("riseTable").querySelectorAll("th[data-rk]").forEach((th) => th.onclick = () => {
+    const k = th.dataset.rk; state.riseSort = sk[0] === k ? [k, -sk[1]] : [k, -1]; renderRising(state.rise); });
+}
+
+/* =====================================================================
+   모바일 화면 (html.m). PC 화면과 같은 데이터(state.pf · state.val …)와 같은 창(선수 창 · 매도 기록)을 쓴다.
+   ===================================================================== */
+const isMobile = () => document.documentElement.classList.contains("m");
+const M = { tab: "1", holdSort: "roi_desc", mode: "rec", sort: "roi", period: "all", open: new Set(), seq: 0 };
+(() => { try { M.tab = localStorage.getItem("fco.mtab") || "1"; } catch (e) {} })();
+const VD = { "매수": "vd-buy", "매도": "vd-sell", "관망": "vd-hold" };
+const vdBadge = (j) => j ? `<span class="vd ${VD[j.verdict] || "vd-hold"}">${j.verdict}</span>` : "";
+const sgn = (v) => v == null || isNaN(v) ? "-" : (v > 0 ? "+" : "") + bp(v).replace("−", "−");
+const mStat = (l, v, cl = "") => `<div class="m-stat"><div class="l">${l}</div><div class="v ${cl}">${v}</div></div>`;
+const mHead = (spid, name, cls_, grade, right) => `<div class="m-head">${face(spid, 44)}<div class="nm"><b>${esc(name ?? "(이름 없음)")}</b><span>${esc(season(cls_))} · ${grade}강</span></div>${right || ""}</div>`;
+
+function mShow(tab) {
+  M.tab = tab;
+  try { localStorage.setItem("fco.mtab", tab); } catch (e) {}
+  document.querySelectorAll("#mobile .m-page").forEach((p) => p.hidden = p.dataset.m !== tab);
+  document.querySelectorAll("#mNav button").forEach((b) => b.setAttribute("aria-current", b.dataset.m === tab ? "page" : "false"));
+  if (tab === "2" && isMobile()) mSearch();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("#mNav button").forEach((b) => b.onclick = () => mShow(b.dataset.m));
+const chips = (el, items, cur, onPick) => {
+  el.innerHTML = items.map(([k, t]) => `<button aria-pressed="${k === cur}" data-k="${k}">${t}</button>`).join("");
+  el.querySelectorAll("button").forEach((b) => b.onclick = () => onPick(b.dataset.k));
+};
+
+/* ---- ① 보유 현황 ---- */
+function mRenderHold() {
+  const pf = state.pf; if (!pf) return;
+  const t = pf.totals, n = pf.lots.reduce((a, l) => a + l.qty, 0);
+  $("mSummary").innerHTML = `<div class="l">총 보유 자산</div><div class="v">${bp(pf.total_bp)}</div>
+    <div class="tiny">보유 BP + 매물 평가액(현재가) · 수수료 빼고 받으면 ${bp(pf.total_bp_after_fee)}</div>
+    <div class="m-grid">${mStat("총 매입 금액", bp(t.cost))}${mStat("보유 BP", bp(pf.cash))}
+      ${mStat("평가 손익 (수수료 후)", `${sgn(t.unrealized)} <span class="small">${t.cost ? pct(t.unrealized / t.cost * 100) : ""}</span>`, cls(t.unrealized))}
+      ${mStat("보유 선수", `${pf.lots.length}명 · ${n}장`)}</div>
+    ${t.no_market < pf.lots.length ? `<div class="tiny" style="margin-top:8px">상한가로 모두 팔면 <span class="${cls(t.profit_at_upper)}">${sgn(t.profit_at_upper)}</span>${pf.best_coupon ? ` · ${pc(pf.best_coupon)} 쿠폰 쓰면 <span class="${cls(t.profit_at_upper_coupon)}">${sgn(t.profit_at_upper_coupon)}</span>` : ""}</div>` : ""}`;
+  chips($("mHoldSort"), [["roi_desc", "수익률 높은 순"], ["roi_asc", "수익률 낮은 순"], ["price_desc", "현재가 높은 순"], ["price_asc", "현재가 낮은 순"]],
+    M.holdSort, (k) => { M.holdSort = k; mRenderHold(); });
+  const [key, dir] = { roi_desc: ["unrealized_roi_pct", -1], roi_asc: ["unrealized_roi_pct", 1], price_desc: ["current_price", -1], price_asc: ["current_price", 1] }[M.holdSort];
+  const lots = pf.lots.map((l, i) => [l, i]).sort(([a], [b]) => ((a[key] ?? -1e18) - (b[key] ?? -1e18)) * dir);
+  $("mHoldList").innerHTML = lots.length ? lots.map(([l, i]) => {
+    const j = l.judge || {}, m = l.market, useC = pf.best_coupon && l.profit_at_upper_coupon != null;
+    const exp = useC ? l.profit_at_upper_coupon : l.profit_at_upper;
+    const tgt = j.target_sell_coupon != null && useC ? j.target_sell_coupon : j.target_sell;
+    return `<div class="m-card${M.open.has(l.id) ? " open" : ""}" data-lot="${i}" data-id="${l.id}">
+      ${mHead(l.spid, l.player_name, l.class_name, l.grade, vdBadge(j))}
+      <div class="m-kv">
+        <div><div class="l">매입가</div><div class="v">${bp(l.buy_price)}${l.qty > 1 ? ` ×${l.qty}` : ""}</div></div>
+        <div><div class="l">현재가</div><div class="v">${bp(l.current_price)}</div></div>
+        <div><div class="l">평가 손익</div><div class="v ${cls(l.unrealized)}">${pct(l.unrealized_roi_pct)}</div></div>
+        <div><div class="l">수수료 후 예상</div><div class="v ${cls(exp)}">${sgn(exp)}</div></div>
+        <div><div class="l">목표 매도가</div><div class="v">${bp(tgt)}</div></div>
+        <div><div class="l">상한가</div><div class="v">${m ? bp(m.upper_limit) : "-"}</div></div>
+      </div>
+      <div class="m-reason">${esc(j.reason || "")}</div>
+      <div class="m-more">
+        <div class="row"><span>평가 손익 (현재가, 수수료 후)</span><b class="${cls(l.unrealized)}">${sgn(l.unrealized)}</b></div>
+        <div class="row"><span>수수료 후 예상 = 상한가 매도</span><span>${useC ? `${pc(pf.best_coupon)} 쿠폰 기준` : `수수료 ${(pf.fee * 100).toFixed(0)}%`}</span></div>
+        <div class="row"><span>하한가 / 상한가</span><span>${m ? `${bp(m.lower_limit)} / ${bp(m.upper_limit)}` : "-"}</span></div>
+        <div class="row"><span>상한가 구매 대기 · 2시간 거래</span><span>${m ? `${m.buy_at_upper}건 · ${m.transfers_2h ?? "-"}건` : "-"}</span></div>
+        <div class="row"><span>손익분기 매도가 (수수료 ${(pf.fee * 100).toFixed(0)}%)</span><span>${bp(l.break_even_sell)}</span></div>
+        <div class="row"><span>목표 매도가 (수수료 / 쿠폰)</span><span>${bp(j.target_sell)}${j.target_sell_coupon != null ? ` / ${bp(j.target_sell_coupon)}` : ""}</span></div>
+        <div class="row"><span>매수일</span><span>${esc(l.bought_at)}</span></div>
+        <div class="m-btns"><button data-act="card">선수 창</button><button data-act="sell" class="primary">매도</button><button data-act="edit">수정</button><button data-act="del">삭제</button></div>
+      </div></div>`;
+  }).join("") : `<div class="m-empty">보유 매물이 없습니다. '+ 추가'로 입력하세요.</div>`;
+  $("mHoldList").querySelectorAll(".m-card").forEach((c) => c.onclick = (e) => {
+    const l = pf.lots[+c.dataset.lot], b = e.target.closest("button[data-act]");
+    if (b) { e.stopPropagation(); if (b.dataset.act === "card") openCard(l.spid, l.grade); else lotForm(l, b.dataset.act); return; }
+    c.classList.toggle("open"); const id = +c.dataset.id; M.open.has(id) ? M.open.delete(id) : M.open.add(id);
+  });
+}
+$("mAddHold").onclick = () => $("addHoldBtn").click();
+$("mRefresh").onclick = () => { $("mRefresh").disabled = true; $("mRefresh").textContent = "받는 중…"; $("mkBtn").click();
+  setTimeout(() => { $("mRefresh").disabled = false; $("mRefresh").textContent = "상한가"; }, 8000); };
+// 빠른 갱신 (PC 의 '지금 갱신 · 빠른 갱신'과 같음). 백그라운드로 돌고, 끝나면 화면을 다시 불러온다.
+let mQuickTimer = null;
+async function mQuickWatch() {
+  try {
+    const r = await api("/api/refresh");
+    if (r.running) { $("mUpdated").textContent = "빠른 갱신 중… (2~4분, 끝나면 자동으로 새로 고침)"; mQuickTimer = setTimeout(mQuickWatch, 15000); return; }
+  } catch (e) { /* 잠깐 끊겨도 다음 확인에서 */ }
+  $("mQuick").disabled = false; $("mQuick").textContent = "빠른 갱신"; mQuickTimer = null;
+  loadAll();
+}
+$("mQuick").onclick = async () => {
+  $("mQuick").disabled = true; $("mQuick").textContent = "갱신 중…";
+  try {
+    const r = await post("/api/refresh", { mode: "quick" });
+    $("mUpdated").textContent = r.message;
+    clearTimeout(mQuickTimer); mQuickTimer = setTimeout(mQuickWatch, 5000);
+  } catch (e) { $("mUpdated").textContent = "갱신 실패: " + e.message; $("mQuick").disabled = false; $("mQuick").textContent = "빠른 갱신"; }
+};
+
+/* ---- ② 선수 검색 · 매수 ---- */
+let mTimer = null;
+async function mSearch() {
+  if (!state.mSeasons) {
+    state.mSeasons = await api("/api/m/seasons").catch(() => []);
+    $("mSeason").innerHTML = `<option value="">시즌 전체</option>` + state.mSeasons.map((s) => `<option>${esc(s)}</option>`).join("");
+    $("mGrade").innerHTML = `<option value="">강화 전체</option>` + [13, 12, 11, 10, 9, 8, 7, 6, 5].map((g) => `<option value="${g}">${g}강</option>`).join("");
+  }
+  chips($("mMode"), [["rec", "랭커 픽 추천"], ["watch", "★ 관심 매물"], ["search", "검색 결과"]], M.mode, (k) => { M.mode = k; mSearch(); });
+  chips($("mSort"), [["roi", "예상 수익률"], ["net", "예상 순이익"], ["chg7", "7일 가격 상승률"], ["price", "현재 가격"]], M.sort, (k) => { M.sort = k; mDrawResults(); });
+  const [lo, hi] = ($("mPrice").value || "-").split("-");
+  const p = new URLSearchParams();
+  if (M.mode === "watch") p.set("watch", "1");
+  else if (M.mode === "search") { p.set("q", $("mQ").value.trim()); p.set("season", $("mSeason").value); p.set("grade", $("mGrade").value); if (lo) p.set("lo", lo); if (hi) p.set("hi", hi); }
+  const seq = ++M.seq;
+  $("mSearchMsg").textContent = "불러오는 중…";
+  try {
+    const r = await api("/api/m/search?" + p.toString());
+    if (seq !== M.seq) return;  // 더 최근 검색이 있으면 버림
+    state.mRes = r; mDrawResults();
+  } catch (e) { $("mSearchMsg").textContent = "불러오기 실패: " + e.message; }
+}
+function mDrawResults() {
+  const r = state.mRes; if (!r) return;
+  chips($("mSort"), [["roi", "예상 수익률"], ["net", "예상 순이익"], ["chg7", "7일 가격 상승률"], ["price", "현재 가격"]], M.sort, (k) => { M.sort = k; mDrawResults(); });
+  const val = (x) => ({ roi: x.judge.roi, net: x.judge.net, chg7: x.chg7_pct, price: x.current_price })[M.sort];
+  const rows = [...r.rows].sort((a, b) => (val(b) ?? -1e18) - (val(a) ?? -1e18));
+  const what = { rec: "랭커 픽 추천 카드", watch: "관심 매물", search: "검색 결과" }[r.mode === "recommend" ? "rec" : r.mode];
+  $("mSearchMsg").textContent = `${what} ${rows.length}장 · 예상 판매가 = 지난 주말 평균, 순이익은 수수료 ${(r.fee * 100).toFixed(0)}% 차감${r.coupon ? ` (쿠폰 ${pc(r.coupon)} 쓰면 따로 표시)` : ""}` + (r.mode === "search" && rows.length >= 60 ? " · 앞 60장 (필터로 좁혀 주세요)" : "");
+  $("mResults").innerHTML = rows.length ? rows.map((x, i) => { const j = x.judge;
+    return `<div class="m-card" data-i="${i}">
+      ${mHead(x.spid, x.player_name, x.class_name, x.grade, `${vdBadge(j)}<button class="star${x.watched ? " on" : ""}" data-star aria-label="관심 매물">${x.watched ? "★" : "☆"}</button>`)}
+      <div class="m-kv">
+        <div><div class="l">현재가</div><div class="v">${bp(x.current_price)}</div></div>
+        <div><div class="l">적정 매수가</div><div class="v">${bp(j.buy_fair)}</div></div>
+        <div><div class="l">예상 판매가</div><div class="v">${bp(j.sell)}</div></div>
+        <div><div class="l">예상 순이익</div><div class="v ${cls(j.net)}">${sgn(j.net)}</div></div>
+        <div><div class="l">예상 수익률</div><div class="v ${cls(j.roi)}">${pct(j.roi)}</div></div>
+        <div><div class="l">7일 가격 · 2시간</div><div class="v"><span class="${cls(x.chg7_pct)}">${pct(x.chg7_pct)}</span> · ${x.transfers_2h ?? "-"}건</div></div>
+      </div>
+      <div class="m-reason">${esc(j.reason)}${j.net_coupon != null && !j.reason.includes("쿠폰") ? ` · 쿠폰 쓰면 <span class="${cls(j.net_coupon)}">${sgn(j.net_coupon)} (${pct(j.roi_coupon)})</span>` : ""}</div>
+    </div>`; }).join("") : `<div class="m-empty">${r.mode === "watch" ? "관심 매물이 없습니다. ☆ 를 눌러 추가하세요." : "해당 카드가 없습니다."}</div>`;
+  $("mResults").querySelectorAll(".m-card").forEach((c) => c.onclick = async (e) => {
+    const x = rows[+c.dataset.i];
+    if (e.target.closest("[data-star]")) {
+      e.stopPropagation();
+      const on = !x.watched;
+      await post("/api/watch", { spid: x.spid, grade: x.grade, on });
+      x.watched = on; mDrawResults(); return;
+    }
+    openCard(x.spid, x.grade);
+  });
+}
+$("mQ").oninput = () => { clearTimeout(mTimer); mTimer = setTimeout(() => { M.mode = "search"; mSearch(); }, 300); };
+["mSeason", "mGrade", "mPrice"].forEach((id) => $(id).onchange = () => { M.mode = "search"; mSearch(); });
+
+/* ---- ③ 매매 분석 · 기록 ---- */
+function mPeriodStart(k) {
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  if (k === "week") d.setDate(d.getDate() - ((d.getDay() + 6) % 7));   // 이번 주 월요일
+  if (k === "month") d.setDate(1);
+  if (k === "all") return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;  // 기기 시각(한국) 기준
+}
+function mChart(trades) {
+  // 누적 실현 손익 (매도일 순). 0 선 위는 초록, 아래는 빨강 점.
+  const pts = []; let acc = 0;
+  [...trades].sort((a, b) => a.sold_at.localeCompare(b.sold_at) || a.id - b.id).forEach((t) => { acc += t.net_profit; pts.push([t.sold_at, acc]); });
+  if (!pts.length) return `<div class="m-empty">이 기간에 매도 기록이 없습니다.</div>`;
+  const css = getComputedStyle(document.documentElement), col = (n) => css.getPropertyValue(n).trim();
+  const W = 340, H = 150, m = { l: 8, r: 8, t: 14, b: 22 };
+  const vals = pts.map((p) => p[1]).concat([0]); const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+  const X = (i) => m.l + (pts.length === 1 ? (W - m.l - m.r) / 2 : i / (pts.length - 1) * (W - m.l - m.r));
+  const Y = (v) => m.t + (1 - (v - lo) / span) * (H - m.t - m.b);
+  const line = pts.map((p, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(p[1]).toFixed(1)).join("");
+  const last = pts[pts.length - 1][1], c = last >= 0 ? col("--good-text") : col("--critical");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="누적 실현 손익">
+    <line x1="${m.l}" x2="${W - m.r}" y1="${Y(0)}" y2="${Y(0)}" stroke="${col("--line")}" stroke-dasharray="3 3"/>
+    <path d="${line}" fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/>
+    ${pts.map((p, i) => `<circle cx="${X(i)}" cy="${Y(p[1])}" r="3.2" fill="${p[1] >= 0 ? col("--good-text") : col("--critical")}"/>`).join("")}
+    <text x="${m.l}" y="${H - 6}" font-size="10" fill="${col("--text-3")}">${pts[0][0].slice(5)}</text>
+    <text x="${W - m.r}" y="${H - 6}" font-size="10" text-anchor="end" fill="${col("--text-3")}">${pts[pts.length - 1][0].slice(5)}</text>
+    <text x="${W - m.r}" y="${m.t - 3}" font-size="11" font-weight="700" text-anchor="end" fill="${c}">누적 ${sgn(last)}</text></svg>`;
+}
+function mRenderTrades() {
+  const pf = state.pf; if (!pf) return;
+  const tr = pf.trades, t = pf.totals;
+  const buyTot = tr.reduce((a, x) => a + x.qty * x.buy_price, 0), sellTot = tr.reduce((a, x) => a + x.qty * x.sell_price, 0);
+  const real = pf.realized.net_profit;
+  $("mTradeSummary").innerHTML = `<div class="l">실현 손익 (수수료 후)</div><div class="v ${cls(real)}">${sgn(real)}</div>
+    <div class="tiny">매도 ${tr.length}건 · 수익 ${pf.realized.wins}건 · 누적 수익률 ${pct(pf.realized.roi_pct)}</div>
+    <div class="m-grid">${mStat("누적 매수 금액", bp(buyTot + t.cost))}${mStat("누적 매도 금액", bp(sellTot))}
+      ${mStat("미실현 손익", sgn(t.unrealized), cls(t.unrealized))}${mStat("보유 BP", bp(pf.cash))}</div>
+    <div class="tiny" style="margin-top:6px">누적 매수 = 매도한 카드의 매수 금액 + 지금 보유 매입 금액. 누적 수익률 = 실현 손익 ÷ 매도한 카드의 매수 금액.</div>`;
+  chips($("mPeriod"), [["day", "일간"], ["week", "주간"], ["month", "월간"], ["all", "전체 기간"]], M.period, (k) => { M.period = k; mRenderTrades(); });
+  const from = mPeriodStart(M.period);
+  const sel = tr.filter((x) => !from || x.sold_at >= from);
+  const pn = sel.reduce((a, x) => a + x.net_profit, 0), pc_ = sel.reduce((a, x) => a + x.qty * x.buy_price, 0);
+  $("mPeriodBox").innerHTML = `<div class="m-grid" style="margin-top:0">${mStat("실현 손익", sgn(pn), cls(pn))}${mStat("수익률", pc_ ? pct(pn / pc_ * 100) : "-", cls(pn))}
+    ${mStat("매도 건수", `${sel.length}건`)}${mStat("승률", sel.length ? Math.round(sel.filter((x) => x.net_profit > 0).length / sel.length * 100) + "%" : "-")}</div>
+    <div class="m-chart" style="margin-top:10px">${mChart(sel)}</div>`;
+  $("mTradeCount").textContent = `${sel.length}건`;
+  $("mTrades").innerHTML = sel.length ? sel.map((x) => { const roi = x.net_profit / (x.qty * x.buy_price) * 100;
+    return `<div class="m-card" data-s="${x.spid}" data-g="${x.grade}">
+      ${mHead(x.spid, x.player_name, x.class_name, x.grade, `<span class="vd ${x.net_profit >= 0 ? "vd-buy" : "vd-hold"}" style="${x.net_profit < 0 ? "color:var(--critical)" : ""}">${pct(roi)}</span>`)}
+      <div class="m-kv">
+        <div><div class="l">매수 → 매도일</div><div class="v small">${esc((x.bought_at || "-").slice(5))} → ${esc(x.sold_at.slice(5))}</div></div>
+        <div><div class="l">매수가 → 매도가</div><div class="v small">${bp(x.buy_price)} → ${bp(x.sell_price)}</div></div>
+        <div><div class="l">실현 손익</div><div class="v ${cls(x.net_profit)}">${sgn(x.net_profit)}</div></div>
+      </div>
+      <div class="m-reason">${x.qty}장 · 수수료 ${(x.fee_rate * 100).toFixed(0)}%${x.coupon_discount ? ` (${pc(x.coupon_discount)} 쿠폰)` : ""}${x.memo ? " · " + esc(x.memo) : ""}</div></div>`; }).join("")
+    : `<div class="m-empty">매도 기록이 없습니다.</div>`;
+  const v = state.val;
+  if (v) {
+    const s = v.all;
+    $("mVal").innerHTML = `랭커 픽 추천 기록 ${v.total}건 · 채점 대기 ${v.pending}건${v.next_grade ? ` · 다음 채점 ${v.next_grade.slice(5)} 주말 뒤` : ""}<br>` +
+      (s.evaluated ? `채점 ${s.evaluated}건: 수수료 기준 평균 <b class="${cls(s.avg_roi_pct)}">${pct(s.avg_roi_pct)}</b>${s.avg_roi_coupon_pct != null ? ` · 쿠폰 쓰면 <b class="${cls(s.avg_roi_coupon_pct)}">${pct(s.avg_roi_coupon_pct)}</b>` : ""} (수익 ${s.wins}건)` : `<span class="tiny">아직 채점된 추천이 없습니다 (추천 뒤 첫 주말 가격이 나오면 채점).</span>`);
+  }
+}
+document.addEventListener("click", (e) => {  // ③ 거래 카드 → 선수 창 (data-s 는 위 공용 처리기가 tr 만 보므로 따로)
+  const c = e.target.closest("#mTrades .m-card[data-s]"); if (c) openCard(+c.dataset.s, +c.dataset.g);
+});
+$("mTheme").onclick = () => { $("themeBtn").click(); mRenderAll(); };
+$("mLogout").onclick = () => $("logoutBtn").click();
+$("mobileViewBtn").onclick = () => { try { localStorage.removeItem("fco.view"); } catch (e) {} document.documentElement.classList.add("m"); mRenderAll(); mShow(M.tab); };
+$("mPcView").onclick = () => { try { localStorage.setItem("fco.view", "pc"); } catch (e) {} document.documentElement.classList.remove("m"); window.scrollTo(0, 0); };
+
+/* ---- ④ 장기투자 (탭3 과 같은 데이터) ---- */
+function mRenderLongterm() {
+  const r = state.lt; if (!r) return;
+  M.ltKind = M.ltKind || "momentum"; M.ltF = M.ltF || "all";
+  $("mLtDesc").innerHTML = `<b>10억 BP 이상</b> 고가 선수. 상승 추세형과 저평가 선점형은 점수·순위가 따로입니다. 매수 후보 = 점수 ${r.config.buyScore}↑ + 인기 ${r.config.popularRankMax}위 이내 + 위험 없음 + 적정가 근접.` +
+    (r.held.length ? `<div style="margin-top:6px">보유 중 ${r.held.length}장 매도 검토: ${r.held.map((h) => `${esc(h.player_name)} ${h.sell_signals.length ? `<span class="neg">${h.sell_signals.map(esc).join(", ")}</span>` : `<span class="pos">근거 유지</span>`}`).join(" · ")}</div>` : "");
+  chips($("mLtKind"), [["momentum", `상승 추세형 ${r.momentum.length}`], ["value", `저평가 선점형 ${r.value.length}`]], M.ltKind, (k) => { M.ltKind = k; mRenderLongterm(); });
+  const pass = { all: () => true, buy: (x) => x.verdict === "매수 후보", wait: (x) => x.verdict === "적정가 대기", top10: (x) => x.pop_rank && x.pop_rank <= 10 };
+  chips($("mLtFilter"), [["all", "전체"], ["buy", "매수 후보"], ["wait", "적정가 대기"], ["top10", "인기 10위 이내"]], M.ltF, (k) => { M.ltF = k; mRenderLongterm(); });
+  const list = (M.ltKind === "momentum" ? r.momentum : r.value).filter(pass[M.ltF]).slice(0, 60);
+  $("mLtList").innerHTML = list.length ? list.map((x, i) => `<div class="m-card" data-i="${i}">
+      ${mHead(x.spid, x.player_name, x.class_name, x.grade, `<span class="vd ${x.verdict === "매수 후보" ? "vd-buy" : "vd-hold"}">${x.rank}위 ${x.inv_grade}</span>`)}
+      <div class="m-kv">
+        <div><div class="l">현재가</div><div class="v">${bp(x.current_price)}</div></div>
+        <div><div class="l">점수</div><div class="v">${x.score == null ? "-" : x.score.toFixed(1)}</div></div>
+        <div><div class="l">매수 적정가</div><div class="v">${x.fair ? bp(x.fair) : "데이터 부족"}</div></div>
+        <div><div class="l">7일 · 30일</div><div class="v"><span class="${cls(x.r7)}">${pct(x.r7 == null ? null : x.r7 * 100, 0)}</span> · <span class="${cls(x.r30)}">${pct(x.r30 == null ? null : x.r30 * 100, 0)}</span></div></div>
+        <div><div class="l">고점 대비</div><div class="v">${x.disc == null ? "-" : "−" + (x.disc * 100).toFixed(0) + "%"}</div></div>
+        <div><div class="l">인기 순위</div><div class="v">${x.pop_rank ? x.pop_rank + "위" : "15위 밖"}</div></div>
+      </div>
+      <div class="m-reason"><b>${esc(x.verdict)}</b>${x.reasons.length ? " · " + x.reasons.map(esc).join(" · ") : ""}${x.risks.length ? `<div class="neg">${x.risks.map(esc).join(" · ")}</div>` : ""}</div>
+    </div>`).join("") : `<div class="m-empty">해당 카드가 없습니다.</div>`;
+  $("mLtList").querySelectorAll(".m-card").forEach((c) => c.onclick = () => { const x = list[+c.dataset.i]; openCard(x.spid, x.grade, ltExtra(x)); });
+  // 거래 많은 순 TOP 15 (한 줄씩)
+  M.ttK = M.ttK || "high";
+  chips($("mTtFilter"), [["high", `${bp(r.min_price)} 이상`], ["all", "전체 가격대"]], M.ttK, (k) => { M.ttK = k; mRenderLongterm(); });
+  const tt = r.trade_top[M.ttK];
+  $("mTtList").innerHTML = tt.length ? tt.map((x, i) => `<div class="m-head" data-tt="${i}" style="padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer">
+      <b style="width:22px;text-align:center;flex:none">${i + 1}</b>${face(x.spid, 34)}
+      <div class="nm"><b>${esc(x.player_name ?? "")}</b><span>${esc(season(x.class_name))} · ${x.grade}강 · ${bp(x.price)}</span></div>
+      <div style="text-align:right;flex:none"><b>${x.transfers_2h}건</b><div class="tiny">상한 대기 ${x.buy_at_upper}</div></div></div>`).join("")
+    : `<div class="m-empty">최근 3시간 안에 받은 거래 기록이 없습니다.</div>`;
+  $("mTtList").querySelectorAll("[data-tt]").forEach((d) => d.onclick = () => { const x = tt[+d.dataset.tt]; openCard(x.spid, x.grade); });
+}
+
+function mRenderAll() {
+  if (!isMobile()) return;
+  mRenderLongterm();
+  const u = state.ov?.updated;  // 모바일은 한 줄로: 가격 갱신 시각만
+  $("mUpdated").textContent = u ? `가격 갱신 ${(u.prices || "-").replace("T", " ").slice(5, 16)}` : $("updated").textContent;
+  mRenderHold(); mRenderTrades();
+  if (M.tab === "2") mSearch();
+}
+mShow(M.tab);
+// 화면 폭이 바뀌면 (가로 회전 · 창 크기) 자동 전환. 'PC 화면으로 보기'를 고른 기기는 PC 유지.
+window.matchMedia("(max-width: 767px)").addEventListener("change", (e) => {
+  let pc = false; try { pc = localStorage.getItem("fco.view") === "pc"; } catch (x) {}
+  document.documentElement.classList.toggle("m", e.matches && !pc);
+  mRenderAll();
+});
+
+async function loadAll() {
+  if (!state.classes) state.classes = await api("/api/classes").catch(() => ({}));  // 시즌 아이콘
+  const [o, s, pf, v, rf, cp, rp, rise, lt] = await Promise.all([api("/api/overview"), api("/api/settings"),
+    api("/api/portfolio"), api("/api/validation"), api("/api/refresh"), api("/api/coupons"), api("/api/rankerpick"), api("/api/rising"),
+    api("/api/longterm").catch((e) => ({ error: e.message }))]);
+  state.val = v; state.ov = o;
+  renderCoupons(cp); renderRankerPick(rp); renderRising(rise);
+  if (lt.error) { $("ltDesc").textContent = "장기투자 분석을 불러오지 못했습니다: " + lt.error; } else { state.lt = lt; renderLongterm(lt); }
+  api("/api/tunnel").then((t) => {
+    $("tunnelBox").innerHTML = t.url
+      ? `지금 주소: <b><a href="${esc(t.url)}" target="_blank" rel="noopener">${esc(t.url)}</a></b> <button id="copyTunnel">복사</button>` +
+        `<div class="tiny" style="margin-top:4px">휴대폰에서 이 주소로 들어가 비밀번호를 넣으면 됩니다 (https 암호화). PC를 다시 켜거나 터널이 다시 열리면 주소가 바뀌니, 외출 전에 이 주소를 확인하세요. 바탕화면 'FC 매물 분석 외부 주소.txt' 에도 적혀 있습니다. 기록 ${esc((t.updated_at || "").replace("T", " "))}</div>`
+      : `<span class="muted">외부 접속이 꺼져 있습니다 (${esc(t.status || "off")}).</span>`;
+    const b = $("copyTunnel"); if (b) b.onclick = () => navigator.clipboard?.writeText(t.url).then(() => b.textContent = "복사됨");
+  }).catch(() => {});
+  api("/api/kakao").then(renderKakao).catch(() => {});
+  renderOverview(o); renderSettings(s); renderPortfolio(pf); renderValidation(v); renderRefresh(rf);
+  mRenderAll();
+}
+loadAll().catch((e) => { $("updated").textContent = "불러오기 실패: " + e.message; $("mUpdated").textContent = $("updated").textContent; });
+</script>
+</body>
+</html>
